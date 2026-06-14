@@ -1042,9 +1042,10 @@ function openItinModal(i, insertAt, cityId) {
   const picked = new Set(step.acts || []);
   const body = `
     <div class="row2">
-      <label>Dates*<input name="date" value="${esc(step.date)}" placeholder="22-24 sept" required></label>
-      <label>Jour<input name="day" value="${esc(step.day)}" placeholder="Mar-Jeu"></label>
+      <label>Date de début*<input name="sd" type="date" value="${esc(step.sd)}" required></label>
+      <label>Date de fin <small class="lbl-auto">(optionnel)</small><input name="ed" type="date" value="${esc(step.ed)}"></label>
     </div>
+    <p class="modal-hint" id="datePreview"></p>
     <label>Titre*<input name="title" value="${esc(step.title)}" required></label>
     <label>Ville (rattachement dans le fil)<select name="city">${cityOpts}</select></label>
     <label>Détail<textarea name="desc" rows="3">${esc(step.desc)}</textarea></label>
@@ -1053,12 +1054,15 @@ function openItinModal(i, insertAt, cityId) {
       <div class="actpick-list" id="actPickList"></div>
     </div>`;
   const root = openModal(title, body, (form) => {
-    const date = form.date.value.trim(), ttl = form.title.value.trim();
-    if (!date || !ttl) { toast("Dates et titre obligatoires"); return false; }
+    const sd = form.sd.value, ed = form.ed.value, ttl = form.title.value.trim();
+    if (!sd || !ttl) { toast("Date de début et titre obligatoires"); return false; }
+    if (ed && ed < sd) { toast("La date de fin doit suivre le début"); return false; }
+    const lab = stepDateLabel(sd, ed);
     const next = getItinerary().map((x) => ({ ...x }));
-    const obj = { date, day: form.day.value.trim(), title: ttl, desc: form.desc.value.trim() };
+    const obj = { date: lab.date, day: lab.day, sd, ed: ed || undefined, title: ttl, desc: form.desc.value.trim() };
     if (form.city.value) obj.cityId = form.city.value;
     if (picked.size) obj.acts = [...picked];
+    Object.keys(obj).forEach((k) => { if (obj[k] === undefined) delete obj[k]; });
     if (isEdit) next[i] = obj;
     else if (insertAt != null) next.splice(insertAt, 0, obj);
     else next.push(obj);
@@ -1066,9 +1070,27 @@ function openItinModal(i, insertAt, cityId) {
     toast(isEdit ? "Étape modifiée ✓" : "Étape ajoutée ✓");
   });
   const form = root.querySelector(".modal-body");
+  const prev = root.querySelector("#datePreview");
+  const refreshPreview = () => {
+    const lab = stepDateLabel(form.sd.value, form.ed.value);
+    prev.textContent = lab.date ? `📅 ${lab.date}${lab.day ? ` · ${lab.day}` : ""}` : "Choisis une date de début.";
+  };
+  form.sd.addEventListener("change", refreshPreview);
+  form.ed.addEventListener("change", refreshPreview);
+  refreshPreview();
   const pickEl = root.querySelector("#actPickList");
   renderActPicker(pickEl, selCity || "", picked);
   form.city.addEventListener("change", () => renderActPicker(pickEl, form.city.value, picked));
+}
+
+// libellé date + jour calculés depuis des dates ISO
+function stepDateLabel(sd, ed) {
+  if (!sd) return { date: "", day: "" };
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const short = (iso) => new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { day:"numeric", month:"short" }).replace(".", "");
+  const wd = (iso) => cap(new Date(iso + "T12:00:00").toLocaleDateString("fr-FR", { weekday:"short" }).replace(".", ""));
+  if (ed && ed !== sd) return { date: `${short(sd)} → ${short(ed)}`, day: `${wd(sd)}–${wd(ed)}` };
+  return { date: short(sd), day: wd(sd) };
 }
 
 // liste de cases à cocher des activités validées (filtrée par ville)
