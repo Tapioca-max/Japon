@@ -816,3 +816,22 @@ body.edit-mode .citybar-admin{display:inline-flex}
 .rs-meta{font-size:.76rem; color:var(--ink-soft); font-family:var(--round)}
 .rs-nights{font-size:.72rem; color:var(--ink-faint)}
 .route-arrow{flex:0 0 auto; align-self:center; font-size:1rem; opacity:.7}
+
+/* ============================================================
+   v16 — Villes & trajets 🚄 intégrés dans le fil de l'itinéraire
+   ============================================================ */
+.tl-city .tl-citybody{position:relative; background:linear-gradient(135deg, rgba(213,31,63,.08), #fff);
+  border:1.5px solid var(--red); border-radius:14px; padding:.55rem .9rem; box-shadow:var(--sh-sm)}
+.tl-city .tl-citybody h4{font-family:var(--serif); font-size:1.06rem; display:flex; align-items:center}
+.tl-citynum{display:inline-grid; place-items:center; width:23px; height:23px; flex:0 0 auto;
+  border-radius:50%; background:var(--red); color:#fff; font-size:.74rem; font-weight:800; margin-right:.45rem}
+.tl-citymeta{font-size:.77rem; color:var(--ink-soft); font-family:var(--round)}
+.tl-city .tl-citybody::before{content:""; position:absolute; left:-16px; top:1rem; width:19px; height:19px;
+  border-radius:50%; background:var(--red); border:3px solid var(--cream); box-shadow:0 0 0 2px var(--red)}
+@media(max-width:600px){.tl-city .tl-citybody::before{left:-13px}}
+.tl-other .tl-citybody{background:#fff; border-color:var(--line-2)}
+.tl-other .tl-citybody::before{background:var(--ink-faint); box-shadow:0 0 0 2px var(--ink-faint)}
+
+.tl-transit{align-items:center; padding:.15rem 0}
+.tl-transit .tt{font-family:var(--round); font-size:.82rem; font-weight:700; color:var(--red);
+  background:#fff; border:1px dashed var(--red); border-radius:99px; padding:.22rem .75rem; display:inline-block}

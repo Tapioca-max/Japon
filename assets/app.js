@@ -388,27 +388,7 @@ function setCityFilter(city) {
 /* ============================================================
    RENDU
    ============================================================ */
-function renderAll() { renderMap(); renderCityFilters(); renderActivities(); renderDashboard(); renderRoute(); renderTimeline(); renderPlan(); }
-
-/* ---------- Parcours dérivé des villes (s'adapte à la carte) ---------- */
-function renderRoute() {
-  const wrap = $("#routeStrip");
-  if (!wrap) return;
-  const cities = getCities();
-  const fmt = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"short" }) : "?";
-  const stops = cities.map((c, i) => {
-    const transit = i < cities.length - 1 ? `<span class="route-arrow" title="Train">🚄</span>` : "";
-    return `<a class="route-stop" href="#plan" title="Voir le plan de ${c.name}">
-        <span class="rs-num">${i+1}</span>
-        <span class="rs-name">${c.name}${c.jp?`<small>${c.jp}</small>`:""}</span>
-        <span class="rs-meta">${fmt(c.arrival)} → ${fmt(c.departure)}</span>
-        <span class="rs-nights">${c.nights != null ? `${c.nights} nuit${c.nights>1?"s":""}` : ""}</span>
-      </a>${transit}`;
-  }).join("");
-  wrap.innerHTML = `<div class="route-head"><h3>Parcours · ${cities.length} villes</h3>
-      <span class="route-hint">Se met à jour avec la carte et les villes</span></div>
-    <div class="route-line">${stops}</div>`;
-}
+function renderAll() { renderMap(); renderCityFilters(); renderActivities(); renderDashboard(); renderTimeline(); renderPlan(); }
 
 function renderActivities() {
   const list = $("#activityList");
@@ -537,31 +517,53 @@ function renderDashboard() {
   $$("#cityBars .city-del").forEach((b) => b.addEventListener("click", () => deleteCity(b.dataset.id)));
 }
 
-/* ---------- Itinéraire (éditable) ---------- */
+/* ---------- Itinéraire : villes + trajets 🚄 intégrés dans le fil ---------- */
 function renderTimeline() {
   const it = getItinerary();
-  const inserter = (k) => `<li class="tl-insert"><button class="tl-add" data-at="${k}" title="Insérer une étape ici">＋</button></li>`;
-  const step = (t, i) => `
+  const cities = getCities();
+  const fmt = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"short" }) : "?";
+  const belongs = (t, c) => t.cityId ? t.cityId === c.id
+    : (!t.cityId && norm((t.title||"") + " " + (t.desc||"")).includes(norm(c.name)));
+
+  const stepLi = (t, i) => `
     <li class="tl">
       <div class="tl-date"><span class="tl-d">${t.date}</span>${t.day?`<small>${t.day}</small>`:""}</div>
       <div class="tl-body">
         <div class="tl-admin">
-          <button class="tl-up" data-i="${i}" title="Monter" ${i===0?"disabled":""}>↑</button>
-          <button class="tl-down" data-i="${i}" title="Descendre" ${i===it.length-1?"disabled":""}>↓</button>
           <button class="tl-edit" data-i="${i}" title="Modifier">✏️</button>
           <button class="tl-del" data-i="${i}" title="Supprimer">🗑️</button>
         </div>
         <h4>${t.title}</h4>${t.desc?`<p>${t.desc}</p>`:""}
       </div>
     </li>`;
-  let html = inserter(0);
-  it.forEach((t, i) => { html += step(t, i) + inserter(i + 1); });
+  const cityLi = (c, i) => `
+    <li class="tl tl-city">
+      <div class="tl-date"></div>
+      <div class="tl-citybody">
+        <h4><span class="tl-citynum">${i+1}</span> ${c.name} ${c.jp?`<span class="jp">${c.jp}</span>`:""}</h4>
+        <span class="tl-citymeta">${fmt(c.arrival)} → ${fmt(c.departure)}${c.nights!=null?` · ${c.nights} nuit${c.nights>1?"s":""}`:""}</span>
+      </div>
+    </li>`;
+  const transitLi = (a, b) => `<li class="tl tl-transit"><div class="tl-date"></div><div class="tt">🚄 ${a} → ${b}</div></li>`;
+  const addLi = (cid, name) => `<li class="tl-insert"><button class="tl-add" data-city="${cid}" title="Ajouter une étape à ${name}">＋</button></li>`;
+
+  const used = new Set();
+  let html = "";
+  cities.forEach((c, i) => {
+    html += cityLi(c, i);
+    it.forEach((t, idx) => { if (!used.has(idx) && belongs(t, c)) { used.add(idx); html += stepLi(t, idx); } });
+    html += addLi(c.id, c.name);
+    if (i < cities.length - 1) html += transitLi(c.name, cities[i + 1].name);
+  });
+  const others = it.map((t, idx) => ({ t, idx })).filter(({ idx }) => !used.has(idx));
+  if (others.length) {
+    html += `<li class="tl tl-city tl-other"><div class="tl-date"></div><div class="tl-citybody"><h4>✦ Autres étapes</h4></div></li>`;
+    others.forEach(({ t, idx }) => { html += stepLi(t, idx); });
+  }
   $("#timeline").innerHTML = html;
   $$("#timeline .tl-edit").forEach((b) => b.addEventListener("click", () => openItinModal(+b.dataset.i)));
   $$("#timeline .tl-del").forEach((b) => b.addEventListener("click", () => deleteItin(+b.dataset.i)));
-  $$("#timeline .tl-up").forEach((b) => b.addEventListener("click", () => moveItin(+b.dataset.i, -1)));
-  $$("#timeline .tl-down").forEach((b) => b.addEventListener("click", () => moveItin(+b.dataset.i, +1)));
-  $$("#timeline .tl-add").forEach((b) => b.addEventListener("click", () => openItinModal(null, +b.dataset.at)));
+  $$("#timeline .tl-add").forEach((b) => b.addEventListener("click", () => openItinModal(null, null, b.dataset.city)));
 }
 
 /* ---------- Plan de voyage (validées + itinéraire, par ville/date) ---------- */
@@ -873,23 +875,28 @@ function openActivityModal(id) {
 }
 
 /* ---------- Modale itinéraire ---------- */
-function openItinModal(i, insertAt) {
+function openItinModal(i, insertAt, cityId) {
   const it = getItinerary();
   const isEdit = i != null;
   const step = isEdit ? it[i] : {};
-  const title = isEdit ? "Modifier l'étape" : (insertAt != null ? "Insérer une étape" : "Ajouter une étape");
+  const selCity = isEdit ? step.cityId : cityId;
+  const title = isEdit ? "Modifier l'étape" : "Ajouter une étape";
+  const cityOpts = `<option value="">— aucune —</option>` +
+    getCities().map((c) => `<option value="${c.id}" ${selCity===c.id?"selected":""}>${c.name}</option>`).join("");
   const body = `
     <div class="row2">
       <label>Dates*<input name="date" value="${esc(step.date)}" placeholder="22-24 sept" required></label>
       <label>Jour<input name="day" value="${esc(step.day)}" placeholder="Mar-Jeu"></label>
     </div>
     <label>Titre*<input name="title" value="${esc(step.title)}" required></label>
+    <label>Ville (rattachement dans le fil)<select name="city">${cityOpts}</select></label>
     <label>Détail<textarea name="desc" rows="3">${esc(step.desc)}</textarea></label>`;
   openModal(title, body, (form) => {
     const date = form.date.value.trim(), ttl = form.title.value.trim();
     if (!date || !ttl) { toast("Dates et titre obligatoires"); return false; }
     const next = getItinerary().map((x) => ({ ...x }));
     const obj = { date, day: form.day.value.trim(), title: ttl, desc: form.desc.value.trim() };
+    if (form.city.value) obj.cityId = form.city.value;
     if (isEdit) next[i] = obj;
     else if (insertAt != null) next.splice(insertAt, 0, obj);
     else next.push(obj);
