@@ -224,7 +224,15 @@ function normalizeArr(v) { return Array.isArray(v) ? v.filter(Boolean) : Object.
 /* ============================================================
    FILTRES
    ============================================================ */
-const filterState = { city:"all", cat:"all", onlyValid:false, hideVoted:false, q:"" };
+const filterState = { city:"all", cat:"all", onlyValid:false, hideVoted:false, hidePlanned:false, q:"" };
+let plannedSet = new Set();
+function plannedIds() {
+  const s = new Set();
+  Object.values(catalog.dayPlan || {}).forEach((arr) => (arr || []).forEach((e) => {
+    const id = typeof e === "string" ? e : (e && e.id); if (id) s.add(id);
+  }));
+  return s;
+}
 const norm = (s) => (s || "").toString().toLowerCase()
   .normalize("NFD").replace(/[\u0300-\u036f]/g, "");   // insensible aux accents
 
@@ -384,6 +392,7 @@ function bindFilters() {
   });
   $("#onlyValid").addEventListener("change", (e) => { filterState.onlyValid = e.target.checked; renderActivities(); });
   $("#hideVoted").addEventListener("change", (e) => { filterState.hideVoted = e.target.checked; renderActivities(); });
+  $("#hidePlanned").addEventListener("change", (e) => { filterState.hidePlanned = e.target.checked; renderActivities(); });
   const search = $("#searchInput"), clr = $("#searchClear");
   search.addEventListener("input", () => {
     filterState.q = norm(search.value.trim());
@@ -407,11 +416,13 @@ function renderActivities() {
   const list = $("#activityList");
   const acts = getActs();
   const q = filterState.q;
+  plannedSet = plannedIds();
   const items = acts.filter((a) => {
     if (filterState.city !== "all" && a.city !== filterState.city) return false;
     if (filterState.cat !== "all" && a.cat !== filterState.cat) return false;
     if (filterState.onlyValid && !isValid(a.id)) return false;
     if (filterState.hideVoted && me && votes[a.id] && votes[a.id][me]) return false;
+    if (filterState.hidePlanned && plannedSet.has(a.id)) return false;
     if (q) {
       const city = getCities().find((c) => c.id === a.city);
       const hay = norm([a.title, a.jp, a.desc, a.tip, a.warn, city && city.name, (a.tags||[]).join(" ")].join(" "));
@@ -471,7 +482,7 @@ function cardHTML(a) {
       <span class="act-cat" title="${cat.label}">${cat.emoji}</span>
       <div class="act-titles">
         <div class="act-title">${a.title} ${a.jp?`<span class="act-jp">${a.jp}</span>`:""}</div>
-        <div class="act-city">${city?city.name:""}</div>
+        <div class="act-city">${city?city.name:""}${plannedSet.has(a.id)?` <span class="act-planned">🗓️ Planifiée</span>`:""}</div>
       </div>
     </div>
     <p class="act-desc">${a.desc || ""}</p>

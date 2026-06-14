@@ -998,3 +998,7 @@ details.plan-res ul{margin:0; padding:.1rem 1.1rem 1rem 2.1rem; display:flex; fl
 /* v27 — étiquette "passage" dans l'agenda */
 .agd-passage{font-family:var(--sans); font-size:.66rem; font-weight:700; background:rgba(255,255,255,.25);
   border:1px solid rgba(255,255,255,.6); border-radius:99px; padding:.05rem .45rem; margin-left:.4rem; vertical-align:middle}
+
+/* v29 — badge "Planifiée" sur les activités posées dans l'agenda */
+.act-planned{display:inline-block; font-size:.62rem; font-weight:800; color:#fff; background:var(--indigo);
+  border-radius:99px; padding:.06rem .45rem; margin-left:.35rem; text-transform:none; letter-spacing:0; vertical-align:middle}
