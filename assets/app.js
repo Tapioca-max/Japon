@@ -163,7 +163,9 @@ function normalizeArr(v) { return Array.isArray(v) ? v.filter(Boolean) : Object.
 /* ============================================================
    FILTRES
    ============================================================ */
-const filterState = { city:"all", cat:"all", onlyValid:false, hideVoted:false };
+const filterState = { city:"all", cat:"all", onlyValid:false, hideVoted:false, q:"" };
+const norm = (s) => (s || "").toString().toLowerCase()
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "");   // insensible aux accents
 
 /* ============================================================
    INIT
@@ -178,8 +180,46 @@ function init() {
   renderPractical();
   renderPhrases();
   applyEditMode();
+  setupRouter();
 
   Store.init((mode) => { setSyncIndicator(mode); renderAll(); });
+}
+
+/* ---------- Routeur : une vue (page) à la fois ---------- */
+const VIEW_IDS = ["tableau", "activites", "itineraire", "pratique"];
+function showView(id) {
+  if (!VIEW_IDS.includes(id)) id = "tableau";
+  VIEW_IDS.forEach((v) => document.getElementById(v).classList.toggle("active", v === id));
+  [...$$(".nav a"), ...$$(".botnav a")].forEach((a) =>
+    a.classList.toggle("active", a.getAttribute("href") === "#" + id));
+  window.scrollTo(0, 0);
+  // Leaflet a besoin d'un recalcul quand sa vue (re)devient visible
+  if (id === "tableau" && map) setTimeout(() => map.invalidateSize(), 80);
+}
+function goView(id) { if (location.hash.slice(1) === id) showView(id); else location.hash = id; }
+function setupRouter() {
+  // délégation : tout lien #vue (nav, barre du bas, boutons internes) change de page
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="#"]'); if (!a) return;
+    const id = a.getAttribute("href").slice(1);
+    if (VIEW_IDS.includes(id)) { e.preventDefault(); goView(id); }
+  });
+  window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
+  showView(location.hash.slice(1) || "tableau");
+}
+
+/* ---------- Compteur animé ---------- */
+function animateNumber(el, to) {
+  if (!el) return;
+  const from = parseInt(el.textContent, 10);
+  if (isNaN(from) || from === to) { el.textContent = to; return; }
+  const start = performance.now(), dur = 450;
+  const step = (t) => {
+    const k = Math.min(1, (t - start) / dur);
+    el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3)));
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 function buildMeSelect() {
@@ -270,6 +310,13 @@ function bindFilters() {
   });
   $("#onlyValid").addEventListener("change", (e) => { filterState.onlyValid = e.target.checked; renderActivities(); });
   $("#hideVoted").addEventListener("change", (e) => { filterState.hideVoted = e.target.checked; renderActivities(); });
+  const search = $("#searchInput"), clr = $("#searchClear");
+  search.addEventListener("input", () => {
+    filterState.q = norm(search.value.trim());
+    clr.hidden = !search.value;
+    renderActivities();
+  });
+  clr.addEventListener("click", () => { search.value = ""; filterState.q = ""; clr.hidden = true; search.focus(); renderActivities(); });
 }
 function setCityFilter(city) {
   filterState.city = city;
@@ -285,11 +332,17 @@ function renderAll() { renderActivities(); renderDashboard(); renderTimeline(); 
 function renderActivities() {
   const list = $("#activityList");
   const acts = getActs();
+  const q = filterState.q;
   const items = acts.filter((a) => {
     if (filterState.city !== "all" && a.city !== filterState.city) return false;
     if (filterState.cat !== "all" && a.cat !== filterState.cat) return false;
     if (filterState.onlyValid && !isValid(a.id)) return false;
     if (filterState.hideVoted && me && votes[a.id] && votes[a.id][me]) return false;
+    if (q) {
+      const city = TRIP.cities.find((c) => c.id === a.city);
+      const hay = norm([a.title, a.jp, a.desc, a.tip, a.warn, city && city.name, (a.tags||[]).join(" ")].join(" "));
+      if (!hay.includes(q)) return false;
+    }
     return true;
   });
   $("#actCount").textContent = `${items.length} activité${items.length>1?"s":""}`;
@@ -368,9 +421,9 @@ function tagLabel(t) {
 
 function renderDashboard() {
   const acts = getActs();
-  $("#kpiActs").textContent = acts.length;
-  $("#kpiValid").textContent = acts.filter((a) => isValid(a.id)).length;
-  $("#kpiCities").textContent = TRIP.cities.length;
+  animateNumber($("#kpiActs"), acts.length);
+  animateNumber($("#kpiValid"), acts.filter((a) => isValid(a.id)).length);
+  animateNumber($("#kpiCities"), TRIP.cities.length);
 
   const counts = Object.fromEntries(MEMBERS.map((m) => [m, 0]));
   acts.forEach((a) => yesMembers(a.id).forEach((m) => counts[m]++));
@@ -395,9 +448,10 @@ function renderDashboard() {
 /* ---------- Itinéraire (éditable) ---------- */
 function renderTimeline() {
   const it = getItinerary();
-  $("#timeline").innerHTML = it.map((t, i) => `
+  const inserter = (k) => `<li class="tl-insert"><button class="tl-add" data-at="${k}" title="Insérer une étape ici">＋</button></li>`;
+  const step = (t, i) => `
     <li class="tl">
-      <div class="tl-date">${t.date}<small>${t.day||""}</small></div>
+      <div class="tl-date"><span class="tl-d">${t.date}</span>${t.day?`<small>${t.day}</small>`:""}</div>
       <div class="tl-body">
         <div class="tl-admin">
           <button class="tl-up" data-i="${i}" title="Monter" ${i===0?"disabled":""}>↑</button>
@@ -405,13 +459,17 @@ function renderTimeline() {
           <button class="tl-edit" data-i="${i}" title="Modifier">✏️</button>
           <button class="tl-del" data-i="${i}" title="Supprimer">🗑️</button>
         </div>
-        <h4>${t.title}</h4><p>${t.desc||""}</p>
+        <h4>${t.title}</h4>${t.desc?`<p>${t.desc}</p>`:""}
       </div>
-    </li>`).join("");
+    </li>`;
+  let html = inserter(0);
+  it.forEach((t, i) => { html += step(t, i) + inserter(i + 1); });
+  $("#timeline").innerHTML = html;
   $$("#timeline .tl-edit").forEach((b) => b.addEventListener("click", () => openItinModal(+b.dataset.i)));
   $$("#timeline .tl-del").forEach((b) => b.addEventListener("click", () => deleteItin(+b.dataset.i)));
   $$("#timeline .tl-up").forEach((b) => b.addEventListener("click", () => moveItin(+b.dataset.i, -1)));
   $$("#timeline .tl-down").forEach((b) => b.addEventListener("click", () => moveItin(+b.dataset.i, +1)));
+  $$("#timeline .tl-add").forEach((b) => b.addEventListener("click", () => openItinModal(null, +b.dataset.at)));
 }
 
 function renderPractical() {
@@ -431,6 +489,7 @@ function bindEditUI() {
     editMode = !editMode;
     localStorage.setItem(LS_EDIT, editMode ? "1" : "0");
     applyEditMode();
+    if (editMode) toast("✏️ Mode édition — tes modifs sont partagées avec le groupe");
   });
   $("#addActivityBtn").addEventListener("click", () => openActivityModal(null));
   $("#addItinBtn").addEventListener("click", () => openItinModal(null));
@@ -537,10 +596,11 @@ function openActivityModal(id) {
 }
 
 /* ---------- Modale itinéraire ---------- */
-function openItinModal(i) {
+function openItinModal(i, insertAt) {
   const it = getItinerary();
-  const step = i != null ? it[i] : {};
-  const isNew = i == null;
+  const isEdit = i != null;
+  const step = isEdit ? it[i] : {};
+  const title = isEdit ? "Modifier l'étape" : (insertAt != null ? "Insérer une étape" : "Ajouter une étape");
   const body = `
     <div class="row2">
       <label>Dates*<input name="date" value="${esc(step.date)}" placeholder="22-24 sept" required></label>
@@ -548,14 +608,16 @@ function openItinModal(i) {
     </div>
     <label>Titre*<input name="title" value="${esc(step.title)}" required></label>
     <label>Détail<textarea name="desc" rows="3">${esc(step.desc)}</textarea></label>`;
-  openModal(isNew ? "Ajouter une étape" : "Modifier l'étape", body, (form) => {
-    const date = form.date.value.trim(), title = form.title.value.trim();
-    if (!date || !title) { toast("Dates et titre obligatoires"); return false; }
+  openModal(title, body, (form) => {
+    const date = form.date.value.trim(), ttl = form.title.value.trim();
+    if (!date || !ttl) { toast("Dates et titre obligatoires"); return false; }
     const next = getItinerary().map((x) => ({ ...x }));
-    const obj = { date, day: form.day.value.trim(), title, desc: form.desc.value.trim() };
-    if (isNew) next.push(obj); else next[i] = obj;
+    const obj = { date, day: form.day.value.trim(), title: ttl, desc: form.desc.value.trim() };
+    if (isEdit) next[i] = obj;
+    else if (insertAt != null) next.splice(insertAt, 0, obj);
+    else next.push(obj);
     Store.saveItinerary(next);
-    toast(isNew ? "Étape ajoutée ✓" : "Étape modifiée ✓");
+    toast(isEdit ? "Étape modifiée ✓" : "Étape ajoutée ✓");
   });
 }
 function deleteItin(i) {
@@ -575,7 +637,7 @@ function moveItin(i, dir) {
    Utils
    ============================================================ */
 function esc(s) { return (s == null ? "" : String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-function scrollToId(id) { document.getElementById(id).scrollIntoView({ behavior:"smooth" }); }
+function scrollToId(id) { goView(id); }   // navigue vers la vue correspondante
 
 let toastTimer;
 function toast(msg) {
