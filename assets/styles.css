@@ -574,3 +574,102 @@ body::before{content:""; position:fixed; inset:0; z-index:-1; pointer-events:non
 @media(prefers-reduced-motion:reduce){
   .hero .leaves{display:none}
 }
+
+/* ============================================================
+   v7 — Allègement + palette rouge & blanc + décors japonais/manga
+   ============================================================ */
+:root{
+  --cream:#fbf7f3; --paper:#ffffff; --paper-2:#f4ece2;
+  --red:#d51f3f; --red-deep:#b3001b; --pink:#ec6a86;
+  --ink:#2a2a31; --ink-soft:#6b6b76; --ink-faint:#a6a6b0;
+  --line:#efe6da; --line-2:#e8dfd1;
+  --gold:#d8a93f; --gold-soft:#ecd49a;
+  --grad-hot:linear-gradient(135deg,#e0234e,#d51f3f);
+  --sh-sm:0 2px 10px rgba(180,30,50,.06);
+  --sh:0 8px 22px rgba(180,30,50,.08);
+  --sh-lg:0 22px 50px rgba(120,20,40,.18);
+}
+
+/* fond : léger dégradé + motif "shippō" (cercles entrelacés) discret */
+body{background-color:#fdfbf8;
+  background-image:
+    radial-gradient(55vw 38vw at 6% -6%, rgba(213,31,63,.06), transparent 60%),
+    radial-gradient(50vw 38vw at 100% 0%, rgba(213,31,63,.05), transparent 55%);}
+body::before{
+  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:1;
+  background-image:
+    radial-gradient(circle at 0 0, transparent 15px, rgba(213,31,63,.055) 16px 17px, transparent 18px),
+    radial-gradient(circle at 17px 17px, transparent 15px, rgba(213,31,63,.055) 16px 17px, transparent 18px);
+  background-size:34px 34px;
+}
+
+/* — En-tête blanc, accents rouges — */
+.topbar{background:rgba(255,255,255,.92); color:var(--ink); border-bottom:1px solid var(--line);
+  box-shadow:0 2px 14px rgba(180,30,50,.06)}
+.brand-jp{color:var(--red)} .brand-sub{color:var(--ink-faint)}
+.nav a{color:var(--ink-soft); opacity:1; background:transparent}
+.nav a:hover{background:rgba(213,31,63,.08); color:var(--red)}
+.nav a.active{background:var(--red); color:#fff}
+#meSelect{background:var(--red); color:#fff}
+.edit-toggle{border:1px solid var(--line-2); color:var(--ink-soft); background:#fff}
+.edit-toggle:hover{border-color:var(--red); color:var(--red)}
+.edit-toggle.on{background:var(--red); color:#fff; border-color:var(--red)}
+
+/* — Décor manga : rayons (soleil levant) derrière l'accueil — */
+.hero::before{display:none}
+.hero::after{content:""; position:absolute; z-index:0; top:-12%; left:50%; transform:translateX(-50%);
+  width:160vw; height:130%; pointer-events:none;
+  background:repeating-conic-gradient(from 0deg at 50% 0%, rgba(213,31,63,.055) 0 5deg, transparent 5deg 11deg);
+  -webkit-mask:radial-gradient(120% 92% at 50% 0%, #000, transparent 72%);
+          mask:radial-gradient(120% 92% at 50% 0%, #000, transparent 72%);}
+.hero h1{text-shadow:none}
+.hero h1 .jp{color:var(--red)}
+.hero-head::after{opacity:.7}
+.section-head h2{text-shadow:none}
+.section .section-head::after{background:linear-gradient(90deg,var(--red),var(--gold))}
+
+/* — Allègement des panneaux : contours fins, ombres douces — */
+.card{border:1px solid var(--line); box-shadow:var(--sh)}
+.countdown{border:none; background:linear-gradient(150deg,#d51f3f,#b3001b)}
+.cd-label{color:rgba(255,255,255,.82)} .cd-unit{color:#fff}
+.act{border:1px solid var(--line); box-shadow:var(--sh)}
+.act::before{width:4px}
+@media(hover:hover){.act:hover{transform:translateY(-4px); box-shadow:0 16px 32px rgba(180,30,50,.13)}}
+.act.valid{border-color:#bfe6cd; box-shadow:0 10px 26px rgba(31,157,87,.15)}
+.act.valid::after{box-shadow:inset 0 0 0 1.5px rgba(31,157,87,.32)}
+.prac,.phrase{border:1px solid var(--line); box-shadow:var(--sh-sm)}
+.modal{border:1px solid var(--line); box-shadow:var(--sh-lg)}
+.modal-body input,.modal-body select,.modal-body textarea{border:1px solid var(--line-2)}
+
+/* — Boutons / puces plus légers — */
+.btn{border:none; box-shadow:var(--sh)}
+.btn:active{transform:scale(.96); box-shadow:none}
+.btn.primary{background:var(--grad-hot); color:#fff}
+.chip{border:1px solid var(--line-2); font-weight:600}
+.chip.active{box-shadow:none; background:var(--red); border-color:var(--red)}
+.chip.cat.active{background:var(--catcolor,var(--red))}
+.lnk{border:1px solid var(--line-2); font-weight:600}
+.lnk.book{box-shadow:none; background:var(--grad-hot)}
+.tag{border:none}
+.vote-btn{border:1.5px solid var(--line-2)}
+.vote-btn.on{box-shadow:none}
+.act-valid-badge{border:none; background:linear-gradient(135deg,#2fae67,#1f9d57)}
+.m-dot{border:none}
+.search-wrap input{border:1.5px solid var(--line-2); box-shadow:var(--sh-sm)}
+.search-wrap input:focus{border-color:var(--red); box-shadow:0 0 0 3px rgba(213,31,63,.16)}
+.search-clear{border:1px solid var(--line-2)}
+
+/* — Timeline plus douce — */
+.timeline::before{background:linear-gradient(var(--red),rgba(213,31,63,.25))}
+.tl-body{border:1px solid var(--line); box-shadow:var(--sh-sm)}
+.tl-body::before{background:#fff; border:3px solid var(--red)}
+.tl-add{border:1.5px solid var(--line-2); background:#fff; color:var(--red); box-shadow:var(--sh-sm)}
+.tl-add:hover{background:var(--red); color:#fff; border-color:var(--red)}
+
+/* — Pied de page rouge & blanc + vague — */
+.footer{background:linear-gradient(135deg,#d51f3f,#b3001b); border-top:none}
+.footer::before{background:radial-gradient(circle at 12px 13px, transparent 10px, #d51f3f 11px) repeat-x; background-size:24px 13px; top:-12px}
+.footer-sub{color:var(--gold-soft)}
+
+/* pétales/feuilles plus discrets */
+.hero .leaves span{opacity:0}
