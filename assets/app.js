@@ -349,7 +349,7 @@ function renderMap() {
     const acts = cityActs(c.id), valid = acts.filter((a)=>isValid(a.id)).length;
     L.marker([c.lat, c.lng], { icon }).addTo(cityLayer).bindPopup(
       `<div class="popup-city">${c.name} ${c.jp?`<span class="popup-jp">${c.jp}</span>`:""}</div>
-       <div class="popup-meta">${fmt(c.arrival)} → ${fmt(c.departure)}${c.nights?` · ${c.nights} nuit${c.nights>1?"s":""}`:""}<br>
+       <div class="popup-meta">${fmt(c.arrival)} → ${fmt(c.departure)}<br>
        <b>${valid}</b> validées / ${acts.length} idées</div>
        <button class="popup-btn" data-city="${c.id}">Voir les activités →</button>`);
   });
@@ -559,7 +559,7 @@ function renderTimeline() {
       <div class="tl-date"></div>
       <div class="tl-citybody">
         <h4><span class="tl-citynum">${i+1}</span> ${c.name} ${c.jp?`<span class="jp">${c.jp}</span>`:""}</h4>
-        <span class="tl-citymeta">${fmt(c.arrival)} → ${fmt(c.departure)}${c.nights!=null?` · ${c.nights} nuit${c.nights>1?"s":""}`:""}</span>
+        <span class="tl-citymeta">${fmt(c.arrival)} → ${fmt(c.departure)}</span>
       </div>
     </li>`;
   const transitLi = (a, b) => `<li class="tl tl-transit"><div class="tl-date"></div><div class="tt">🚄 ${a} → ${b}</div></li>`;
@@ -929,26 +929,20 @@ function openCityModal(id, latlng) {
       <label>Départ<input name="departure" type="date" value="${esc(c.departure)}"></label>
     </div>
     <div class="row2">
-      <label>Nuits <small class="lbl-auto">(calculées)</small><input name="nights" type="number" min="0" value="${esc(c.nights)}" readonly></label>
-      <label>&nbsp;<button type="button" class="btn ghost" id="repickBtn">📍 Placer sur la carte</button></label>
-    </div>
-    <div class="row2">
       <label>Latitude*<input name="lat" value="${esc(lat)}" required></label>
       <label>Longitude*<input name="lng" value="${esc(lng)}" required></label>
     </div>
-    <p class="modal-hint">Le nombre de nuits se calcule automatiquement (départ − arrivée). Le tracé se réordonne selon la date d'arrivée.</p>`;
+    <p class="modal-hint"><button type="button" class="btn ghost sm" id="repickBtn">📍 Placer sur la carte</button> — le tracé se réordonne selon la date d'arrivée.</p>`;
   const root = openModal(isNew ? "Ajouter une ville" : "Modifier la ville", body, (form) => {
     const name = form.name.value.trim();
     const la = parseFloat(form.lat.value), ln = parseFloat(form.lng.value);
     if (!name) { toast("Le nom est obligatoire"); return false; }
     if (!form.arrival.value) { toast("La date d'arrivée est obligatoire"); return false; }
     if (isNaN(la) || isNaN(ln)) { toast("Place la ville sur la carte (lat/lng)"); return false; }
-    const nights = nightsBetween(form.arrival.value, form.departure.value);
     const obj = {
       id: isNew ? "city-" + Date.now().toString(36) : id,
       name, jp: form.jp.value.trim(),
       arrival: form.arrival.value, departure: form.departure.value,
-      nights: nights != null ? nights : undefined,
       lat: la, lng: ln,
     };
     Object.keys(obj).forEach((k) => { if (obj[k] === "" || obj[k] === undefined) delete obj[k]; });
@@ -956,14 +950,9 @@ function openCityModal(id, latlng) {
     Store.saveCity(obj, isNew || isCustomCity(id));
     toast(isNew ? "Ville ajoutée ✓" : "Ville modifiée ✓");
   });
-  // nuits = départ − arrivée, recalculé en direct
-  const form = root.querySelector(".modal-body");
-  const recompute = () => { const n = nightsBetween(form.arrival.value, form.departure.value); form.nights.value = n != null ? n : ""; };
-  form.arrival.addEventListener("change", recompute);
-  form.departure.addEventListener("change", recompute);
-  recompute();
-  const rb = root.querySelector("#repickBtn");
-  if (rb) rb.addEventListener("click", () => { root.innerHTML = ""; startCityPick(); });
+  const root2 = root;
+  const rb = root2.querySelector("#repickBtn");
+  if (rb) rb.addEventListener("click", () => { root2.innerHTML = ""; startCityPick(); });
 }
 function nightsBetween(arrival, departure) {
   if (!arrival || !departure) return null;
