@@ -32,6 +32,7 @@
       <a href="#pratique">Pratique</a>
     </nav>
     <div class="me" id="meBox">
+      <button id="editToggle" class="edit-toggle" title="Activer le mode édition">✏️ Éditer</button>
       <span class="me-label">Je suis</span>
       <select id="meSelect" aria-label="Qui es-tu ?"></select>
       <span class="sync-pill" id="syncPill" title="Mode de synchronisation">·</span>
@@ -61,7 +62,7 @@
         <div class="card countdown">
           <span class="cd-label">Départ dans</span>
           <span class="cd-value" id="cdValue">—</span>
-          <span class="cd-unit">jours</span>
+          <span class="cd-unit" id="cdUnit">jours</span>
           <span class="cd-sub" id="cdSub"></span>
         </div>
 
@@ -102,6 +103,12 @@
       </div>
     </div>
 
+    <div class="list-toolbar">
+      <span class="list-count" id="actCount">—</span>
+      <button class="btn add" id="addActivityBtn">＋ Ajouter une activité</button>
+    </div>
+    <div class="hidden-panel" id="hiddenPanel" hidden></div>
+
     <div id="activityList" class="activity-list"></div>
     <p class="empty" id="emptyMsg" hidden>Aucune activité ne correspond à ces filtres.</p>
   </section>
@@ -113,6 +120,9 @@
       <h2>L'itinéraire <span class="jp">／ 旅程</span></h2>
     </div>
     <ol class="timeline" id="timeline"></ol>
+    <div class="list-toolbar center">
+      <button class="btn add" id="addItinBtn">＋ Ajouter une étape</button>
+    </div>
   </section>
 
   <!-- ===================== PRATIQUE ===================== -->
@@ -134,6 +144,9 @@
 
   <!-- Toast -->
   <div class="toast" id="toast" hidden></div>
+
+  <!-- Modales (édition) -->
+  <div id="modalRoot"></div>
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"

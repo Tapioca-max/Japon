@@ -263,3 +263,104 @@ a{color:inherit}
 .popup-meta{font-size:.78rem; color:var(--ink-soft); margin:.3rem 0}
 .popup-btn{display:inline-block; margin-top:.3rem; background:var(--indigo); color:#fff; border:none;
   padding:.35rem .8rem; border-radius:99px; font-size:.8rem; cursor:pointer; font-family:var(--sans); font-weight:700}
+
+/* ============================================================
+   v2 — Édition, liens de référence, modale & polish UX
+   ============================================================ */
+
+/* Bouton mode édition (topbar) */
+.edit-toggle{
+  border:1px solid rgba(255,255,255,.35); background:transparent; color:#fff;
+  border-radius:999px; padding:.32rem .8rem; font-size:.82rem; font-weight:700;
+  cursor:pointer; font-family:var(--sans); transition:.15s; white-space:nowrap;
+}
+.edit-toggle:hover{border-color:var(--gold)}
+.edit-toggle.on{background:var(--gold); color:var(--indigo); border-color:var(--gold)}
+.me{gap:.6rem}
+
+/* Boutons génériques */
+.btn{border:none; border-radius:999px; padding:.5rem 1rem; font-family:var(--sans); font-weight:700;
+  font-size:.85rem; cursor:pointer; transition:.15s; display:inline-flex; align-items:center; gap:.35rem}
+.btn.primary{background:var(--indigo); color:#fff}
+.btn.primary:hover{background:var(--indigo-2)}
+.btn.ghost{background:transparent; color:var(--ink-soft); border:1px solid var(--line)}
+.btn.ghost:hover{border-color:var(--ink-soft)}
+.btn.add{background:linear-gradient(135deg,var(--red),var(--red-soft)); color:#fff; box-shadow:var(--shadow)}
+.btn.add:hover{filter:brightness(1.05)}
+
+/* Barre d'outils liste (compteur + ajouter) */
+.list-toolbar{display:flex; align-items:center; gap:1rem; max-width:var(--maxw); margin:0 auto 1rem; flex-wrap:wrap}
+.list-toolbar.center{justify-content:center; margin-top:1.4rem}
+.list-count{font-size:.85rem; color:var(--ink-soft); font-weight:600}
+.btn.add{display:none}                       /* visible seulement en mode édition */
+body.edit-mode .btn.add{display:inline-flex}
+
+/* Panneau des activités masquées */
+.hidden-panel{display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; max-width:var(--maxw);
+  margin:0 auto 1.2rem; padding:.7rem .9rem; background:#fff; border:1px dashed var(--line); border-radius:12px}
+.hp-label{font-size:.8rem; color:var(--ink-soft); font-weight:700}
+.hp-item{border:1px solid var(--line); background:var(--cream); border-radius:99px; padding:.25rem .7rem;
+  font-size:.8rem; cursor:pointer; font-family:var(--sans)}
+.hp-item:hover{border-color:var(--ok); color:var(--ok)}
+
+/* Boutons d'admin sur les cartes (cachés hors édition) */
+.act-admin{position:absolute; top:.6rem; right:.6rem; display:none; gap:.25rem; z-index:2}
+body.edit-mode .act-admin{display:flex}
+.act-admin button{width:30px; height:30px; border-radius:8px; border:1px solid var(--line);
+  background:#fff; cursor:pointer; font-size:.85rem; line-height:1; box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.act-admin button:hover{background:var(--cream-2)}
+body.edit-mode .act{border-style:dashed}
+
+/* Liens de référence / réservation */
+.act-links{display:flex; flex-wrap:wrap; gap:.4rem; margin:.1rem 0 .8rem}
+.lnk{font-size:.76rem; font-weight:700; text-decoration:none; padding:.28rem .6rem; border-radius:8px;
+  border:1px solid var(--line); color:var(--ink-soft); background:#fff; transition:.15s}
+.lnk:hover{border-color:var(--indigo); color:var(--indigo)}
+.lnk.book{background:#fdeaec; border-color:#f3c2c8; color:var(--red)}
+.lnk.book:hover{background:var(--red); color:#fff; border-color:var(--red)}
+
+/* Itinéraire — admin */
+.tl-admin{position:absolute; top:.5rem; right:.6rem; display:none; gap:.2rem}
+body.edit-mode .tl-admin{display:flex}
+.tl-admin button{width:26px; height:26px; border-radius:7px; border:1px solid var(--line);
+  background:#fff; cursor:pointer; font-size:.78rem; line-height:1}
+.tl-admin button:disabled{opacity:.3; cursor:default}
+.tl-admin button:not(:disabled):hover{background:var(--cream-2)}
+body.edit-mode .tl-body{padding-right:7rem}
+
+/* ---------------- Modale ---------------- */
+#modalRoot:empty{display:none}
+.modal-overlay{position:fixed; inset:0; background:rgba(27,36,64,.55); backdrop-filter:blur(3px);
+  display:grid; place-items:center; z-index:3000; padding:1rem; animation:fade .15s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{background:var(--cream); width:min(560px,100%); max-height:90vh; overflow:auto;
+  border-radius:18px; box-shadow:0 30px 80px rgba(0,0,0,.4); border:1px solid var(--line)}
+.modal-head{display:flex; align-items:center; justify-content:space-between; padding:1.1rem 1.3rem;
+  border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--cream); z-index:1}
+.modal-head h3{font-family:var(--serif); font-size:1.2rem}
+.modal-x{border:none; background:none; font-size:1.1rem; cursor:pointer; color:var(--ink-soft); padding:.2rem .4rem}
+.modal-body{padding:1.2rem 1.3rem; display:flex; flex-direction:column; gap:.85rem}
+.modal-body label{display:flex; flex-direction:column; gap:.3rem; font-size:.8rem; font-weight:700; color:var(--ink-soft)}
+.modal-body input, .modal-body select, .modal-body textarea{
+  font-family:var(--sans); font-size:.92rem; font-weight:400; color:var(--ink);
+  border:1px solid var(--line); border-radius:10px; padding:.55rem .7rem; background:#fff; width:100%}
+.modal-body input:focus, .modal-body select:focus, .modal-body textarea:focus{
+  outline:none; border-color:var(--indigo); box-shadow:0 0 0 3px rgba(27,36,64,.1)}
+.modal-body textarea{resize:vertical}
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:.85rem}
+@media(max-width:480px){.row2{grid-template-columns:1fr}}
+.tagrow{display:flex; flex-wrap:wrap; gap:.5rem .9rem; align-items:center}
+.tagrow-lbl{font-size:.8rem; font-weight:700; color:var(--ink-soft); width:100%}
+.tagcheck{flex-direction:row !important; align-items:center; gap:.35rem !important; font-weight:500 !important;
+  color:var(--ink) !important; font-size:.85rem !important; cursor:pointer}
+.tagcheck input{width:auto !important; accent-color:var(--red)}
+.modal-foot{display:flex; justify-content:flex-end; gap:.6rem; padding:1rem 1.3rem;
+  border-top:1px solid var(--line); position:sticky; bottom:0; background:var(--cream)}
+
+/* Hint discret quand le mode édition est actif */
+body.edit-mode::before{content:"✏️ Mode édition actif — tes ajouts/modifs sont partagés avec le groupe";
+  position:fixed; bottom:0; left:0; right:0; background:var(--gold); color:var(--indigo);
+  font-size:.78rem; font-weight:700; text-align:center; padding:.35rem; z-index:1500}
+body.edit-mode .footer{margin-bottom:1.8rem}
+
+.m-name{min-width:46px}

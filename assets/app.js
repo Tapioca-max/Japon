@@ -1,74 +1,85 @@
 /* ============================================================
-   日本旅行 2026 — Logique de l'application
-   - Identité du membre (qui vote depuis cet appareil)
-   - Stockage des votes : LOCAL (par défaut) ou CLOUD temps réel
-     (Firebase Realtime Database, si une config est fournie)
-   - Carte interactive, tableau de bord, cartes d'activités à voter
+   日本旅行 2026 — Logique de l'application (v2)
+   - Identité du membre, votes (LOCAL ou CLOUD temps réel)
+   - Édition PARTAGÉE du catalogue d'activités et de l'itinéraire
+     (les votes ne sont jamais modifiés par ces éditions)
+   - Carte interactive, tableau de bord, liens de réservation
    ============================================================ */
 
 const TRIP = window.TRIP;
 const MEMBERS = TRIP.members;
 const THRESHOLD = TRIP.voteThreshold;
 const CATS = TRIP.categories;
+const ROOM = window.JAPON_CONFIG?.room || "japon-2026";
 
-const MEMBER_COLORS = {
-  Sacha: "#b3001b",
-  Manon: "#c026a0",
-  Raph:  "#3b6ea5",
-  Ivo:   "#2f7d4f",
-};
+const MEMBER_COLORS = { Sacha:"#b3001b", Manon:"#c026a0", Raph:"#3b6ea5", Ivo:"#2f7d4f" };
 const colorFor = (m) => MEMBER_COLORS[m] || "#1b2440";
 
-const LS_ME    = "japon2026.me";
-const LS_VOTES = "japon2026.votes." + (window.JAPON_CONFIG?.room || "japon-2026");
+const LS_ME      = "japon2026.me";
+const LS_VOTES   = "japon2026.votes." + ROOM;
+const LS_CATALOG = "japon2026.catalog." + ROOM;
+const LS_ITIN    = "japon2026.itin." + ROOM;
+const LS_EDIT    = "japon2026.editmode";
 
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-let votes = {};          // { actId: { member: true } }
+let votes = {};                                   // { actId: { member:true } }
+let catalog = { custom:{}, edits:{}, removed:{} }; // édition partagée du catalogue
+let itinOverride = null;                           // itinéraire édité (sinon TRIP.timeline)
 let me = localStorage.getItem(LS_ME) || "";
+let editMode = localStorage.getItem(LS_EDIT) === "1";
 
-/* ---------- État des votes ---------- */
+/* ---------- Catalogue effectif (base + éditions partagées) ---------- */
+function getActs() {
+  const out = [];
+  TRIP.activities.forEach((a) => {
+    if (catalog.removed[a.id]) return;
+    out.push({ ...a, ...(catalog.edits[a.id] || {}), _base: true });
+  });
+  Object.values(catalog.custom || {}).forEach((a) => {
+    if (a && a.id && !catalog.removed[a.id]) out.push({ ...a, _custom: true });
+  });
+  return out;
+}
+function getItinerary() { return itinOverride && itinOverride.length ? itinOverride : TRIP.timeline; }
+
 const yesMembers = (id) => MEMBERS.filter((m) => votes[id] && votes[id][m]);
 const countOf    = (id) => yesMembers(id).length;
 const isValid    = (id) => countOf(id) >= THRESHOLD;
-const cityActs   = (cid) => TRIP.activities.filter((a) => a.city === cid);
+const cityActs   = (cid) => getActs().filter((a) => a.city === cid);
 
 /* ============================================================
-   COUCHE DE STOCKAGE  (local <-> cloud)
+   STOCKAGE (local <-> cloud)  — votes + catalogue + itinéraire
    ============================================================ */
 const Store = {
-  mode: "local",
-  _cb: null,
-  _fb: null,
-  _room: window.JAPON_CONFIG?.room || "japon-2026",
+  mode: "local", _cb: null, _fb: null, _room: ROOM,
 
   async init(cb) {
     this._cb = cb;
     const cfg = window.JAPON_CONFIG?.firebase;
     if (cfg && cfg.databaseURL) {
-      try {
-        await this._initCloud(cfg);
-        return;
-      } catch (e) {
-        console.warn("[Japon] Cloud indisponible, bascule en mode local :", e);
-        toast("Cloud injoignable — mode local activé");
-      }
+      try { await this._initCloud(cfg); return; }
+      catch (e) { console.warn("[Japon] Cloud indisponible → mode local :", e); toast("Cloud injoignable — mode local"); }
     }
     this._initLocal();
   },
 
+  _loadLocal() {
+    try { votes = JSON.parse(localStorage.getItem(LS_VOTES) || "{}"); } catch { votes = {}; }
+    try {
+      const c = JSON.parse(localStorage.getItem(LS_CATALOG) || "{}");
+      catalog = { custom: c.custom || {}, edits: c.edits || {}, removed: c.removed || {} };
+    } catch { catalog = { custom:{}, edits:{}, removed:{} }; }
+    try { itinOverride = JSON.parse(localStorage.getItem(LS_ITIN) || "null"); } catch { itinOverride = null; }
+  },
+
   _initLocal() {
     this.mode = "local";
-    try { votes = JSON.parse(localStorage.getItem(LS_VOTES) || "{}"); }
-    catch { votes = {}; }
+    this._loadLocal();
     this._cb(this.mode);
-    // synchro entre onglets du même appareil
     window.addEventListener("storage", (e) => {
-      if (e.key === LS_VOTES) {
-        try { votes = JSON.parse(e.newValue || "{}"); } catch { votes = {}; }
-        this._cb(this.mode);
-      }
+      if ([LS_VOTES, LS_CATALOG, LS_ITIN].includes(e.key)) { this._loadLocal(); this._cb(this.mode); }
     });
   },
 
@@ -80,23 +91,24 @@ const Store = {
     const db = getDatabase(app);
     this._fb = { db, ref, set, remove };
     this.mode = "cloud";
-    const votesRef = ref(db, `rooms/${this._room}/votes`);
-    onValue(votesRef, (snap) => {
-      votes = snap.val() || {};
+    onValue(ref(db, `rooms/${this._room}`), (snap) => {
+      const v = snap.val() || {};
+      votes = v.votes || {};
+      const c = v.catalog || {};
+      catalog = { custom: c.custom || {}, edits: c.edits || {}, removed: c.removed || {} };
+      itinOverride = v.itinerary ? normalizeArr(v.itinerary) : null;
       this._cb(this.mode);
     });
   },
 
-  async toggle(actId, member, value) {
+  // ---- Votes (logique inchangée) ----
+  async toggleVote(actId, member, value) {
     if (this.mode === "cloud") {
       const { db, ref, set, remove } = this._fb;
-      const r = ref(db, `rooms/${this._room}/votes/${actId}/${member}`);
       try {
+        const r = ref(db, `rooms/${this._room}/votes/${actId}/${member}`);
         if (value) await set(r, true); else await remove(r);
-      } catch (e) {
-        console.error(e); toast("Vote non enregistré (réseau)");
-      }
-      // l'UI se met à jour via onValue
+      } catch (e) { console.error(e); toast("Vote non enregistré (réseau)"); }
     } else {
       if (!votes[actId]) votes[actId] = {};
       if (value) votes[actId][member] = true; else delete votes[actId][member];
@@ -105,127 +117,151 @@ const Store = {
       this._cb(this.mode);
     }
   },
+
+  // ---- Catalogue ----
+  async saveActivity(obj, isCustom) {
+    if (this.mode === "cloud") {
+      const { db, ref, set } = this._fb;
+      const path = isCustom ? `catalog/custom/${obj.id}` : `catalog/edits/${obj.id}`;
+      await set(ref(db, `rooms/${this._room}/${path}`), obj);
+    } else {
+      if (isCustom) catalog.custom[obj.id] = obj; else catalog.edits[obj.id] = obj;
+      this._persistCatalog();
+    }
+  },
+  async removeActivity(id, isCustom) {
+    if (this.mode === "cloud") {
+      const { db, ref, set, remove } = this._fb;
+      if (isCustom) await remove(ref(db, `rooms/${this._room}/catalog/custom/${id}`));
+      else await set(ref(db, `rooms/${this._room}/catalog/removed/${id}`), true);
+    } else {
+      if (isCustom) delete catalog.custom[id]; else catalog.removed[id] = true;
+      this._persistCatalog();
+    }
+  },
+  async restoreActivity(id) {
+    if (this.mode === "cloud") {
+      const { db, ref, remove } = this._fb;
+      await remove(ref(db, `rooms/${this._room}/catalog/removed/${id}`));
+    } else { delete catalog.removed[id]; this._persistCatalog(); }
+  },
+  _persistCatalog() { localStorage.setItem(LS_CATALOG, JSON.stringify(catalog)); this._cb(this.mode); },
+
+  // ---- Itinéraire ----
+  async saveItinerary(arr) {
+    if (this.mode === "cloud") {
+      const { db, ref, set } = this._fb;
+      await set(ref(db, `rooms/${this._room}/itinerary`), arr);
+    } else {
+      itinOverride = arr; localStorage.setItem(LS_ITIN, JSON.stringify(arr)); this._cb(this.mode);
+    }
+  },
 };
+
+function normalizeArr(v) { return Array.isArray(v) ? v.filter(Boolean) : Object.values(v).filter(Boolean); }
 
 /* ============================================================
    FILTRES
    ============================================================ */
-const filterState = { city: "all", cat: "all", onlyValid: false, hideVoted: false };
+const filterState = { city:"all", cat:"all", onlyValid:false, hideVoted:false };
 
 /* ============================================================
-   INITIALISATION
+   INIT
    ============================================================ */
 function init() {
   buildMeSelect();
   buildHeroDates();
   buildMap();
   buildFilters();
-  renderTimeline();
+  bindFilters();
+  bindEditUI();
   renderPractical();
   renderPhrases();
-  bindFilters();
+  applyEditMode();
 
-  Store.init((mode) => {
-    setSyncIndicator(mode);
-    renderAll();
-  });
+  Store.init((mode) => { setSyncIndicator(mode); renderAll(); });
 }
 
-/* ---------- Sélecteur "Je suis" ---------- */
 function buildMeSelect() {
   const sel = $("#meSelect");
   sel.innerHTML = `<option value="">— choisis —</option>` +
     MEMBERS.map((m) => `<option value="${m}" ${m === me ? "selected" : ""}>${m}</option>`).join("");
-  sel.addEventListener("change", () => {
-    me = sel.value;
-    localStorage.setItem(LS_ME, me);
-    sel.style.background = me ? colorFor(me) : "var(--gold)";
-    sel.style.color = me ? "#fff" : "var(--indigo)";
-    renderActivities();
-  });
-  if (me) { sel.style.background = colorFor(me); sel.style.color = "#fff"; }
+  const paint = () => { sel.style.background = me ? colorFor(me) : "var(--gold)"; sel.style.color = me ? "#fff" : "var(--indigo)"; };
+  sel.addEventListener("change", () => { me = sel.value; localStorage.setItem(LS_ME, me); paint(); renderActivities(); });
+  if (me) paint();
 }
 
 function buildHeroDates() {
-  const fmt = (d) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-  $("#heroDates").textContent =
-    `${fmt(TRIP.period.start)} → ${fmt(TRIP.period.end)} · ${TRIP.cities.length} villes`;
+  const fmt = (d) => new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" });
+  $("#heroDates").textContent = `${fmt(TRIP.period.start)} → ${fmt(TRIP.period.end)} · ${TRIP.cities.length} villes`;
+  updateCountdown();
+}
+
+function updateCountdown() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const start = new Date(TRIP.period.start);
+  const days = Math.round((start - today) / 86400000);
+  const el = $("#cdValue"), sub = $("#cdSub");
+  if (!el) return;
+  if (days > 0) { el.textContent = days; sub.textContent = `Départ le ${start.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}`; $("#cdUnit").textContent = days > 1 ? "jours" : "jour"; }
+  else if (days === 0) { el.textContent = "🎌"; sub.textContent = "C'est aujourd'hui !"; $("#cdUnit").textContent = ""; }
+  else { el.textContent = "✓"; sub.textContent = "Bon voyage !"; $("#cdUnit").textContent = ""; }
 }
 
 function setSyncIndicator(mode) {
   const pill = $("#syncPill");
   pill.className = "sync-pill " + (mode === "cloud" ? "cloud" : "local");
   pill.title = mode === "cloud"
-    ? "Cloud temps réel — les votes sont partagés en direct"
-    : "Mode local — votes stockés sur cet appareil (configure Firebase pour partager)";
-  $("#footerSync").textContent = mode === "cloud" ? "· ☁ votes synchronisés" : "· 💾 mode local";
+    ? "Cloud temps réel — votes & éditions partagés en direct"
+    : "Mode local — données stockées sur cet appareil";
+  $("#footerSync").textContent = mode === "cloud" ? "· ☁ synchronisé" : "· 💾 local";
 }
 
 /* ============================================================
-   CARTE (Leaflet)
+   CARTE
    ============================================================ */
-let map, cityLayers = {};
+let map, cityMarkers = {}, routeLine;
 function buildMap() {
-  map = L.map("map", { scrollWheelZoom: false, zoomControl: true });
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-    attribution: '© OpenStreetMap · © CARTO',
-    maxZoom: 18,
-  }).addTo(map);
-
+  map = L.map("map", { scrollWheelZoom:false, zoomControl:true });
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    { attribution:"© OpenStreetMap · © CARTO", maxZoom:18 }).addTo(map);
   const pts = TRIP.cities.map((c) => [c.lat, c.lng]);
-  // tracé "train" : ordre du voyage + retour à Tokyo (boucle, comme le screenshot)
-  const route = [...pts, pts[0]];
-  L.polyline(route, { color: "#b3001b", weight: 3, opacity: .75, dashArray: "1 0" }).addTo(map);
-
+  routeLine = L.polyline([...pts, pts[0]], { color:"#b3001b", weight:3, opacity:.7 }).addTo(map);
   TRIP.cities.forEach((c, i) => {
-    const icon = L.divIcon({
-      className: "",
-      html: `<div class="city-pin"><span>${i + 1}</span></div>`,
-      iconSize: [30, 30], iconAnchor: [15, 28],
-    });
-    const acts = cityActs(c.id).length;
-    const fmt = (d) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-    const m = L.marker([c.lat, c.lng], { icon }).addTo(map);
-    m.bindPopup(
-      `<div class="popup-city">${c.name} <span class="popup-jp">${c.jp}</span></div>
-       <div class="popup-meta">${fmt(c.arrival)} → ${fmt(c.departure)} · ${c.nights} nuit${c.nights > 1 ? "s" : ""}<br>${acts} activités proposées</div>
-       <button class="popup-btn" data-city="${c.id}">Voir les activités →</button>`
-    );
-    cityLayers[c.id] = m;
+    const icon = L.divIcon({ className:"", html:`<div class="city-pin"><span>${i+1}</span></div>`, iconSize:[30,30], iconAnchor:[15,28] });
+    cityMarkers[c.id] = L.marker([c.lat, c.lng], { icon }).addTo(map);
   });
-
   map.on("popupopen", (e) => {
     const btn = e.popup._contentNode.querySelector(".popup-btn");
-    if (btn) btn.addEventListener("click", () => {
-      setCityFilter(btn.dataset.city);
-      document.getElementById("activites").scrollIntoView({ behavior: "smooth" });
-    });
+    if (btn) btn.addEventListener("click", () => { setCityFilter(btn.dataset.city); scrollToId("activites"); });
   });
-
-  map.fitBounds(pts, { padding: [40, 40] });
+  map.fitBounds(pts, { padding:[40,40] });
+}
+function refreshMapPopups() {
+  const fmt = (d) => new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"short" });
+  TRIP.cities.forEach((c) => {
+    const acts = cityActs(c.id), valid = acts.filter((a)=>isValid(a.id)).length;
+    cityMarkers[c.id].bindPopup(
+      `<div class="popup-city">${c.name} <span class="popup-jp">${c.jp}</span></div>
+       <div class="popup-meta">${fmt(c.arrival)} → ${fmt(c.departure)} · ${c.nights} nuit${c.nights>1?"s":""}<br>
+       <b>${valid}</b> validées / ${acts.length} idées</div>
+       <button class="popup-btn" data-city="${c.id}">Voir les activités →</button>`);
+  });
 }
 
 /* ============================================================
-   FILTRES (chips)
+   FILTRES
    ============================================================ */
 function buildFilters() {
-  const cityWrap = $("#cityFilters");
-  cityWrap.innerHTML =
-    `<button class="chip city active" data-city="all">Toutes les villes</button>` +
+  $("#cityFilters").innerHTML =
+    `<button class="chip city active" data-city="all">Toutes</button>` +
     TRIP.cities.map((c) => `<button class="chip city" data-city="${c.id}">${c.name}</button>`).join("");
-
-  const catWrap = $("#catFilters");
-  catWrap.innerHTML =
+  $("#catFilters").innerHTML =
     `<button class="chip cat active" data-cat="all">Toutes catégories</button>` +
-    Object.entries(CATS).map(([k, v]) =>
-      `<button class="chip cat" data-cat="${k}" style="--catcolor:${v.color}">${v.emoji} ${v.label}</button>`).join("");
+    Object.entries(CATS).map(([k,v]) => `<button class="chip cat" data-cat="${k}" style="--catcolor:${v.color}">${v.emoji} ${v.label}</button>`).join("");
 }
-
 function bindFilters() {
-  $("#cityFilters").addEventListener("click", (e) => {
-    const b = e.target.closest(".chip"); if (!b) return;
-    setCityFilter(b.dataset.city);
-  });
+  $("#cityFilters").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) setCityFilter(b.dataset.city); });
   $("#catFilters").addEventListener("click", (e) => {
     const b = e.target.closest(".chip"); if (!b) return;
     filterState.cat = b.dataset.cat;
@@ -235,7 +271,6 @@ function bindFilters() {
   $("#onlyValid").addEventListener("change", (e) => { filterState.onlyValid = e.target.checked; renderActivities(); });
   $("#hideVoted").addEventListener("change", (e) => { filterState.hideVoted = e.target.checked; renderActivities(); });
 }
-
 function setCityFilter(city) {
   filterState.city = city;
   $$("#cityFilters .chip").forEach((c) => c.classList.toggle("active", c.dataset.city === city));
@@ -245,175 +280,309 @@ function setCityFilter(city) {
 /* ============================================================
    RENDU
    ============================================================ */
-function renderAll() {
-  renderActivities();
-  renderDashboard();
-}
+function renderAll() { renderActivities(); renderDashboard(); renderTimeline(); refreshMapPopups(); }
 
-/* ---------- Activités ---------- */
 function renderActivities() {
   const list = $("#activityList");
-  const items = TRIP.activities.filter((a) => {
+  const acts = getActs();
+  const items = acts.filter((a) => {
     if (filterState.city !== "all" && a.city !== filterState.city) return false;
     if (filterState.cat !== "all" && a.cat !== filterState.cat) return false;
     if (filterState.onlyValid && !isValid(a.id)) return false;
     if (filterState.hideVoted && me && votes[a.id] && votes[a.id][me]) return false;
     return true;
   });
-
+  $("#actCount").textContent = `${items.length} activité${items.length>1?"s":""}`;
   $("#emptyMsg").hidden = items.length > 0;
   list.innerHTML = items.map(cardHTML).join("");
 
-  // brancher les boutons de vote
-  $$(".vote-btn", list).forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const { act, member } = btn.dataset;
-      if (!me) { toast("Sélectionne d'abord ton prénom en haut à droite ☝️"); return; }
-      if (member !== me) { toast(`Tu es « ${me} » — tu ne peux voter que pour toi`); return; }
-      const has = votes[act] && votes[act][member];
-      Store.toggle(act, member, !has);
-    });
-  });
+  $$(".vote-btn", list).forEach((btn) => btn.addEventListener("click", () => {
+    const { act, member } = btn.dataset;
+    if (!me) { toast("Choisis d'abord ton prénom en haut à droite ☝️"); return; }
+    if (member !== me) { toast(`Tu es « ${me} » — tu ne votes que pour toi`); return; }
+    Store.toggleVote(act, member, !(votes[act] && votes[act][member]));
+  }));
+  $$(".act-edit", list).forEach((b) => b.addEventListener("click", () => openActivityModal(b.dataset.id)));
+  $$(".act-del", list).forEach((b) => b.addEventListener("click", () => deleteActivity(b.dataset.id)));
+
+  renderHiddenPanel();
+}
+
+function mapsLink(a) {
+  const city = TRIP.cities.find((c) => c.id === a.city);
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(`${a.title} ${city?city.name:""} Japan`);
 }
 
 function cardHTML(a) {
-  const cat = CATS[a.cat];
-  const cnt = countOf(a.id);
-  const valid = cnt >= THRESHOLD;
+  const cat = CATS[a.cat] || { emoji:"📍", label:"", color:"#888" };
+  const cnt = countOf(a.id), valid = cnt >= THRESHOLD;
   const city = TRIP.cities.find((c) => c.id === a.city);
-
   const notes =
     (a.tip  ? `<div class="act-note tip"><b>💡</b><span>${a.tip}</span></div>` : "") +
     (a.warn ? `<div class="act-note warn"><b>⚠️</b><span>${a.warn}</span></div>` : "");
+  const tags = (a.tags || []).map((t) => `<span class="tag ${t}">${tagLabel(t)}</span>`).join("");
 
-  const tags = (a.tags || []).map((t) =>
-    `<span class="tag ${t}">${tagLabel(t)}</span>`).join("");
+  const links = `<div class="act-links">
+      ${a.booking ? `<a class="lnk book" href="${a.booking}" target="_blank" rel="noopener">🎫 Réserver</a>` : ""}
+      ${a.url ? `<a class="lnk" href="${a.url}" target="_blank" rel="noopener">🔗 Site</a>` : ""}
+      <a class="lnk" href="${mapsLink(a)}" target="_blank" rel="noopener">📍 Carte</a>
+    </div>`;
 
   const buttons = MEMBERS.map((m) => {
-    const on = votes[a.id] && votes[a.id][m];
-    const isMe = m === me;
-    return `<button class="vote-btn ${on ? "on" : ""} ${isMe ? "me" : ""}"
-              style="--member-color:${colorFor(m)}"
-              data-act="${a.id}" data-member="${m}" title="${on ? "A voté" : "Pas de vote"}">
-              <span class="v-name">${m}</span>
-              <span class="v-mark">${on ? "✓" : "+"}</span>
-            </button>`;
+    const on = votes[a.id] && votes[a.id][m], isMe = m === me;
+    return `<button class="vote-btn ${on?"on":""} ${isMe?"me":""}" style="--member-color:${colorFor(m)}"
+              data-act="${a.id}" data-member="${m}"><span class="v-name">${m}</span><span class="v-mark">${on?"✓":"+"}</span></button>`;
   }).join("");
 
-  return `<article class="act ${valid ? "valid" : ""}" style="--catcolor:${cat.color}">
+  return `<article class="act ${valid?"valid":""}" style="--catcolor:${cat.color}">
     <span class="act-valid-badge">✓ Validée</span>
+    <div class="act-admin">
+      <button class="act-edit" data-id="${a.id}" title="Modifier">✏️</button>
+      <button class="act-del" data-id="${a.id}" title="Supprimer">🗑️</button>
+    </div>
     <div class="act-top">
       <span class="act-cat" title="${cat.label}">${cat.emoji}</span>
       <div class="act-titles">
-        <div class="act-title">${a.title} ${a.jp ? `<span class="act-jp">${a.jp}</span>` : ""}</div>
-        <div class="act-city">${city.name}</div>
+        <div class="act-title">${a.title} ${a.jp?`<span class="act-jp">${a.jp}</span>`:""}</div>
+        <div class="act-city">${city?city.name:""}</div>
       </div>
     </div>
-    <p class="act-desc">${a.desc}</p>
+    <p class="act-desc">${a.desc || ""}</p>
     ${notes}
     ${tags ? `<div class="act-tags">${tags}</div>` : ""}
+    ${links}
     <div class="act-vote">
       <div class="vote-row">${buttons}</div>
       <div class="vote-tally">
-        <span class="tally-count"><b>${cnt}</b>/${MEMBERS.length} vote${cnt > 1 ? "s" : ""}</span>
-        <span class="tally-state ${valid ? "yes" : "no"}">${valid ? "✓ Au programme" : `${THRESHOLD - cnt > 0 ? THRESHOLD - cnt : 0} pour valider`}</span>
+        <span class="tally-count"><b>${cnt}</b>/${MEMBERS.length} vote${cnt>1?"s":""}</span>
+        <span class="tally-state ${valid?"yes":"no"}">${valid?"✓ Au programme":`encore ${Math.max(0,THRESHOLD-cnt)} pour valider`}</span>
       </div>
     </div>
   </article>`;
 }
 
 function tagLabel(t) {
-  return {
-    reservation: "Réservation",
-    unesco: "UNESCO",
-    incontournable: "Incontournable",
-    insolite: "Insolite",
-    food: "À manger",
-    fermeture: "Fermeture",
-    gratuit: "Gratuit",
-  }[t] || t;
+  return { reservation:"Réservation", unesco:"UNESCO", incontournable:"Incontournable",
+    insolite:"Insolite", food:"À manger", fermeture:"Fermeture", gratuit:"Gratuit" }[t] || t;
 }
 
-/* ---------- Tableau de bord ---------- */
 function renderDashboard() {
-  const total = TRIP.activities.length;
-  const valid = TRIP.activities.filter((a) => isValid(a.id)).length;
-  $("#kpiActs").textContent = total;
-  $("#kpiValid").textContent = valid;
+  const acts = getActs();
+  $("#kpiActs").textContent = acts.length;
+  $("#kpiValid").textContent = acts.filter((a) => isValid(a.id)).length;
   $("#kpiCities").textContent = TRIP.cities.length;
 
-  // votes par membre
   const counts = Object.fromEntries(MEMBERS.map((m) => [m, 0]));
-  TRIP.activities.forEach((a) => yesMembers(a.id).forEach((m) => counts[m]++));
+  acts.forEach((a) => yesMembers(a.id).forEach((m) => counts[m]++));
   const max = Math.max(1, ...Object.values(counts));
   $("#membersList").innerHTML = MEMBERS.map((m) => `
-    <li>
-      <span class="m-dot" style="background:${colorFor(m)}">${m[0]}</span>
-      <span style="min-width:46px">${m}</span>
-      <span class="m-bar"><span style="width:${(counts[m] / max) * 100}%;background:${colorFor(m)}"></span></span>
-      <span class="m-count">${counts[m]}</span>
-    </li>`).join("");
+    <li><span class="m-dot" style="background:${colorFor(m)}">${m[0]}</span>
+      <span class="m-name">${m}</span>
+      <span class="m-bar"><span style="width:${(counts[m]/max)*100}%;background:${colorFor(m)}"></span></span>
+      <span class="m-count">${counts[m]}</span></li>`).join("");
 
-  // progression par ville
   $("#cityBars").innerHTML = TRIP.cities.map((c) => {
-    const acts = cityActs(c.id);
-    const v = acts.filter((a) => isValid(a.id)).length;
-    const pct = acts.length ? (v / acts.length) * 100 : 0;
+    const ca = cityActs(c.id), v = ca.filter((a) => isValid(a.id)).length;
+    const pct = ca.length ? (v/ca.length)*100 : 0;
     return `<div class="citybar" data-city="${c.id}">
-      <div class="citybar-top">
-        <span class="citybar-name">${c.name}<small>${c.jp}</small></span>
-        <span class="citybar-count">${v}/${acts.length}</span>
-      </div>
-      <div class="citybar-track"><span style="width:${pct}%"></span></div>
-    </div>`;
+      <div class="citybar-top"><span class="citybar-name">${c.name}<small>${c.jp}</small></span>
+      <span class="citybar-count">${v}/${ca.length}</span></div>
+      <div class="citybar-track"><span style="width:${pct}%"></span></div></div>`;
   }).join("");
-  $$("#cityBars .citybar").forEach((el) => el.addEventListener("click", () => {
-    setCityFilter(el.dataset.city);
-    document.getElementById("activites").scrollIntoView({ behavior: "smooth" });
-  }));
+  $$("#cityBars .citybar").forEach((el) => el.addEventListener("click", () => { setCityFilter(el.dataset.city); scrollToId("activites"); }));
 }
 
-/* ---------- Itinéraire ---------- */
+/* ---------- Itinéraire (éditable) ---------- */
 function renderTimeline() {
-  $("#timeline").innerHTML = TRIP.timeline.map((t) => `
+  const it = getItinerary();
+  $("#timeline").innerHTML = it.map((t, i) => `
     <li class="tl">
-      <div class="tl-date">${t.date}<small>${t.day}</small></div>
-      <div class="tl-body"><h4>${t.title}</h4><p>${t.desc}</p></div>
+      <div class="tl-date">${t.date}<small>${t.day||""}</small></div>
+      <div class="tl-body">
+        <div class="tl-admin">
+          <button class="tl-up" data-i="${i}" title="Monter" ${i===0?"disabled":""}>↑</button>
+          <button class="tl-down" data-i="${i}" title="Descendre" ${i===it.length-1?"disabled":""}>↓</button>
+          <button class="tl-edit" data-i="${i}" title="Modifier">✏️</button>
+          <button class="tl-del" data-i="${i}" title="Supprimer">🗑️</button>
+        </div>
+        <h4>${t.title}</h4><p>${t.desc||""}</p>
+      </div>
     </li>`).join("");
+  $$("#timeline .tl-edit").forEach((b) => b.addEventListener("click", () => openItinModal(+b.dataset.i)));
+  $$("#timeline .tl-del").forEach((b) => b.addEventListener("click", () => deleteItin(+b.dataset.i)));
+  $$("#timeline .tl-up").forEach((b) => b.addEventListener("click", () => moveItin(+b.dataset.i, -1)));
+  $$("#timeline .tl-down").forEach((b) => b.addEventListener("click", () => moveItin(+b.dataset.i, +1)));
 }
 
-/* ---------- Pratique ---------- */
 function renderPractical() {
-  $("#practicalGrid").innerHTML = TRIP.practical.map((p) => `
-    <div class="prac">
-      <div class="prac-icon">${p.icon}</div>
-      <h4>${p.title}</h4>
-      <p>${p.body}</p>
-    </div>`).join("");
+  $("#practicalGrid").innerHTML = TRIP.practical.map((p) =>
+    `<div class="prac"><div class="prac-icon">${p.icon}</div><h4>${p.title}</h4><p>${p.body}</p></div>`).join("");
 }
-
 function renderPhrases() {
-  $("#phrases").innerHTML = TRIP.phrases.map(([jp, ro, fr]) => `
-    <div class="phrase">
-      <span class="jpw">${jp}</span>
-      <span class="romaji">${ro}</span>
-      <span class="fr">${fr}</span>
-    </div>`).join("");
+  $("#phrases").innerHTML = TRIP.phrases.map(([jp,ro,fr]) =>
+    `<div class="phrase"><span class="jpw">${jp}</span><span class="romaji">${ro}</span><span class="fr">${fr}</span></div>`).join("");
 }
 
-/* ---------- Toast ---------- */
+/* ============================================================
+   MODE ÉDITION
+   ============================================================ */
+function bindEditUI() {
+  $("#editToggle").addEventListener("click", () => {
+    editMode = !editMode;
+    localStorage.setItem(LS_EDIT, editMode ? "1" : "0");
+    applyEditMode();
+  });
+  $("#addActivityBtn").addEventListener("click", () => openActivityModal(null));
+  $("#addItinBtn").addEventListener("click", () => openItinModal(null));
+}
+function applyEditMode() {
+  document.body.classList.toggle("edit-mode", editMode);
+  const t = $("#editToggle");
+  t.classList.toggle("on", editMode);
+  t.textContent = editMode ? "✓ Édition" : "✏️ Éditer";
+  renderHiddenPanel();
+}
+
+function deleteActivity(id) {
+  const a = getActs().find((x) => x.id === id) || TRIP.activities.find((x) => x.id === id);
+  if (!a) return;
+  if (!confirm(`Supprimer « ${a.title} » de la liste ?\n(Les votes existants sont conservés ; tu pourras la restaurer.)`)) return;
+  Store.removeActivity(id, !!catalog.custom[id]);
+  toast("Activité supprimée");
+}
+
+function renderHiddenPanel() {
+  const wrap = $("#hiddenPanel");
+  if (!wrap) return;
+  const ids = Object.keys(catalog.removed || {}).filter((id) => catalog.removed[id]);
+  if (!editMode || ids.length === 0) { wrap.hidden = true; wrap.innerHTML = ""; return; }
+  wrap.hidden = false;
+  wrap.innerHTML = `<span class="hp-label">Masquées :</span>` + ids.map((id) => {
+    const a = TRIP.activities.find((x) => x.id === id) || (catalog.custom[id]);
+    const name = a ? a.title : id;
+    return `<button class="hp-item" data-id="${id}">↩︎ ${name}</button>`;
+  }).join("");
+  $$(".hp-item", wrap).forEach((b) => b.addEventListener("click", () => { Store.restoreActivity(b.dataset.id); toast("Restaurée"); }));
+}
+
+/* ---------- Modale générique ---------- */
+function openModal(title, bodyHTML, onSave) {
+  const root = $("#modalRoot");
+  root.innerHTML = `<div class="modal-overlay">
+    <div class="modal">
+      <div class="modal-head"><h3>${title}</h3><button class="modal-x" aria-label="Fermer">✕</button></div>
+      <form class="modal-body">${bodyHTML}</form>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" data-act="cancel">Annuler</button>
+        <button type="button" class="btn primary" data-act="save">Enregistrer</button>
+      </div>
+    </div></div>`;
+  const close = () => { root.innerHTML = ""; };
+  root.querySelector(".modal-x").onclick = close;
+  root.querySelector('[data-act="cancel"]').onclick = close;
+  root.querySelector(".modal-overlay").onclick = (e) => { if (e.target.classList.contains("modal-overlay")) close(); };
+  root.querySelector('[data-act="save"]').onclick = () => {
+    const form = root.querySelector(".modal-body");
+    if (onSave(form) !== false) close();
+  };
+  return root;
+}
+
+/* ---------- Modale activité ---------- */
+function openActivityModal(id) {
+  const a = id ? (getActs().find((x) => x.id === id) || {}) : {};
+  const isNew = !id;
+  const cityOpts = TRIP.cities.map((c) => `<option value="${c.id}" ${a.city===c.id?"selected":""}>${c.name}</option>`).join("");
+  const catOpts = Object.entries(CATS).map(([k,v]) => `<option value="${k}" ${a.cat===k?"selected":""}>${v.emoji} ${v.label}</option>`).join("");
+  const allTags = ["incontournable","reservation","unesco","insolite","food","gratuit","fermeture"];
+  const tagChecks = allTags.map((t) =>
+    `<label class="tagcheck"><input type="checkbox" name="tag" value="${t}" ${(a.tags||[]).includes(t)?"checked":""}> ${tagLabel(t)}</label>`).join("");
+
+  const body = `
+    <label>Nom de l'activité*<input name="title" value="${esc(a.title)}" required></label>
+    <div class="row2">
+      <label>Ville*<select name="city">${cityOpts}</select></label>
+      <label>Catégorie*<select name="cat">${catOpts}</select></label>
+    </div>
+    <label>Nom japonais (optionnel)<input name="jp" value="${esc(a.jp)}" placeholder="例 : 浅草寺"></label>
+    <label>Description<textarea name="desc" rows="3">${esc(a.desc)}</textarea></label>
+    <div class="row2">
+      <label>💡 Astuce<input name="tip" value="${esc(a.tip)}"></label>
+      <label>⚠️ Alerte / réservation<input name="warn" value="${esc(a.warn)}"></label>
+    </div>
+    <div class="row2">
+      <label>🔗 Site officiel<input name="url" value="${esc(a.url)}" placeholder="https://…"></label>
+      <label>🎫 Lien de réservation<input name="booking" value="${esc(a.booking)}" placeholder="https://…"></label>
+    </div>
+    <div class="tagrow"><span class="tagrow-lbl">Étiquettes</span>${tagChecks}</div>`;
+
+  openModal(isNew ? "Ajouter une activité" : "Modifier l'activité", body, (form) => {
+    const title = form.title.value.trim();
+    if (!title) { toast("Le nom est obligatoire"); return false; }
+    const tags = [...form.querySelectorAll('input[name="tag"]:checked')].map((c) => c.value);
+    const isCustom = isNew || !!catalog.custom[id];
+    const obj = {
+      id: isNew ? "custom-" + Date.now().toString(36) : id,
+      city: form.city.value, cat: form.cat.value, title,
+      jp: form.jp.value.trim(), desc: form.desc.value.trim(),
+      tip: form.tip.value.trim(), warn: form.warn.value.trim(),
+      url: form.url.value.trim(), booking: form.booking.value.trim(),
+      tags,
+    };
+    Object.keys(obj).forEach((k) => { if (obj[k] === "" || (Array.isArray(obj[k]) && !obj[k].length)) delete obj[k]; });
+    obj.id = isNew ? obj.id : id; obj.title = title; obj.city = form.city.value; obj.cat = form.cat.value;
+    Store.saveActivity(obj, isCustom);
+    toast(isNew ? "Activité ajoutée ✓" : "Activité modifiée ✓");
+  });
+}
+
+/* ---------- Modale itinéraire ---------- */
+function openItinModal(i) {
+  const it = getItinerary();
+  const step = i != null ? it[i] : {};
+  const isNew = i == null;
+  const body = `
+    <div class="row2">
+      <label>Dates*<input name="date" value="${esc(step.date)}" placeholder="22-24 sept" required></label>
+      <label>Jour<input name="day" value="${esc(step.day)}" placeholder="Mar-Jeu"></label>
+    </div>
+    <label>Titre*<input name="title" value="${esc(step.title)}" required></label>
+    <label>Détail<textarea name="desc" rows="3">${esc(step.desc)}</textarea></label>`;
+  openModal(isNew ? "Ajouter une étape" : "Modifier l'étape", body, (form) => {
+    const date = form.date.value.trim(), title = form.title.value.trim();
+    if (!date || !title) { toast("Dates et titre obligatoires"); return false; }
+    const next = getItinerary().map((x) => ({ ...x }));
+    const obj = { date, day: form.day.value.trim(), title, desc: form.desc.value.trim() };
+    if (isNew) next.push(obj); else next[i] = obj;
+    Store.saveItinerary(next);
+    toast(isNew ? "Étape ajoutée ✓" : "Étape modifiée ✓");
+  });
+}
+function deleteItin(i) {
+  const it = getItinerary();
+  if (!confirm(`Supprimer l'étape « ${it[i].title} » ?`)) return;
+  Store.saveItinerary(it.filter((_, idx) => idx !== i).map((x) => ({ ...x })));
+  toast("Étape supprimée");
+}
+function moveItin(i, dir) {
+  const it = getItinerary().map((x) => ({ ...x }));
+  const j = i + dir; if (j < 0 || j >= it.length) return;
+  [it[i], it[j]] = [it[j], it[i]];
+  Store.saveItinerary(it);
+}
+
+/* ============================================================
+   Utils
+   ============================================================ */
+function esc(s) { return (s == null ? "" : String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function scrollToId(id) { document.getElementById(id).scrollIntoView({ behavior:"smooth" }); }
+
 let toastTimer;
 function toast(msg) {
-  const t = $("#toast");
-  t.textContent = msg;
-  t.hidden = false;
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
   requestAnimationFrame(() => t.classList.add("show"));
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    t.classList.remove("show");
-    setTimeout(() => (t.hidden = true), 300);
-  }, 2600);
+  toastTimer = setTimeout(() => { t.classList.remove("show"); setTimeout(() => (t.hidden = true), 300); }, 2600);
 }
 
-/* ---------- Go ---------- */
 init();
