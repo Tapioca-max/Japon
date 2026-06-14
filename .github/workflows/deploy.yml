@@ -7,8 +7,11 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["claude/beautiful-johnson-daiis5", "preview", "main"]
+    branches: ["claude/beautiful-johnson-daiis5", "main"]
   workflow_dispatch:
+  # NB : la branche "preview" ne déclenche PAS de déploiement direct
+  # (l'environnement github-pages n'autorise que la branche par défaut).
+  # Son contenu est aspiré dans /preview par ce workflow lancé depuis la prod.
 
 permissions:
   contents: read
