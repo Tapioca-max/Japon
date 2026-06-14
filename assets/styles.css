@@ -793,3 +793,26 @@ body.edit-mode .citybar-admin{display:inline-flex}
 /* v14 — champ "nuits" auto-calculé */
 .lbl-auto{font-weight:400; color:var(--ink-faint); text-transform:none; letter-spacing:0}
 .modal-body input[readonly]{background:var(--paper-2); color:var(--ink-soft); cursor:not-allowed}
+
+/* ============================================================
+   v15 — « Parcours » dérivé des villes dans l'itinéraire
+   ============================================================ */
+.itin-sub{text-align:center; font-family:var(--serif); font-size:1.05rem; color:var(--ink-soft); margin:1.6rem 0 1rem}
+.route-strip{max-width:760px; margin:0 auto 1rem}
+.route-head{display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; flex-wrap:wrap; margin-bottom:.7rem}
+.route-head h3{font-size:1.05rem}
+.route-hint{font-size:.74rem; color:var(--ink-faint); font-style:italic}
+.route-line{display:flex; align-items:stretch; gap:.5rem; overflow-x:auto; padding:.2rem .1rem .6rem;
+  scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+.route-line::-webkit-scrollbar{display:none}
+.route-stop{flex:0 0 auto; scroll-snap-align:start; text-decoration:none; min-width:120px;
+  display:flex; flex-direction:column; gap:.15rem; background:#fff; border:1px solid var(--line);
+  border-left:4px solid var(--red); border-radius:14px; padding:.6rem .75rem; box-shadow:var(--sh-sm); transition:.16s}
+.route-stop:hover{transform:translateY(-3px); box-shadow:var(--sh)}
+.rs-num{width:22px; height:22px; border-radius:50%; background:var(--red); color:#fff; display:grid;
+  place-items:center; font-weight:800; font-size:.74rem; font-family:var(--serif)}
+.rs-name{font-family:var(--serif); font-weight:700; font-size:.98rem; color:var(--ink)}
+.rs-name small{font-family:var(--round); color:var(--red); font-weight:400; font-size:.74rem; margin-left:.2rem}
+.rs-meta{font-size:.76rem; color:var(--ink-soft); font-family:var(--round)}
+.rs-nights{font-size:.72rem; color:var(--ink-faint)}
+.route-arrow{flex:0 0 auto; align-self:center; font-size:1rem; opacity:.7}

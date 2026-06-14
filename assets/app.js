@@ -388,7 +388,27 @@ function setCityFilter(city) {
 /* ============================================================
    RENDU
    ============================================================ */
-function renderAll() { renderMap(); renderCityFilters(); renderActivities(); renderDashboard(); renderTimeline(); renderPlan(); }
+function renderAll() { renderMap(); renderCityFilters(); renderActivities(); renderDashboard(); renderRoute(); renderTimeline(); renderPlan(); }
+
+/* ---------- Parcours dérivé des villes (s'adapte à la carte) ---------- */
+function renderRoute() {
+  const wrap = $("#routeStrip");
+  if (!wrap) return;
+  const cities = getCities();
+  const fmt = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"short" }) : "?";
+  const stops = cities.map((c, i) => {
+    const transit = i < cities.length - 1 ? `<span class="route-arrow" title="Train">🚄</span>` : "";
+    return `<a class="route-stop" href="#plan" title="Voir le plan de ${c.name}">
+        <span class="rs-num">${i+1}</span>
+        <span class="rs-name">${c.name}${c.jp?`<small>${c.jp}</small>`:""}</span>
+        <span class="rs-meta">${fmt(c.arrival)} → ${fmt(c.departure)}</span>
+        <span class="rs-nights">${c.nights != null ? `${c.nights} nuit${c.nights>1?"s":""}` : ""}</span>
+      </a>${transit}`;
+  }).join("");
+  wrap.innerHTML = `<div class="route-head"><h3>Parcours · ${cities.length} villes</h3>
+      <span class="route-hint">Se met à jour avec la carte et les villes</span></div>
+    <div class="route-line">${stops}</div>`;
+}
 
 function renderActivities() {
   const list = $("#activityList");
