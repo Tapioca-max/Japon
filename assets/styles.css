@@ -673,3 +673,23 @@ body::before{
 
 /* pétales/feuilles plus discrets */
 .hero .leaves span{opacity:0}
+
+/* ============================================================
+   v8 — Bascule complète des accents vers le ROUGE (plus de bleu/or)
+   On redéfinit les variables elles-mêmes : tout ce qui était
+   indigo (bleu) ou gold (doré/beige) devient rouge.
+   ============================================================ */
+:root{
+  --indigo:#a4112a;   --indigo-2:#7d0c1f;  --violet:#c0233f;
+  --gold:#c01030;     --gold-soft:#eaa6b0;
+  --grad-cool:linear-gradient(135deg,#d51f3f,#a4112a);
+  --grad-gold:linear-gradient(135deg,#d51f3f,#a4112a);
+}
+/* le japonais d'accent passe en rouge profond plutôt qu'en doré */
+.jp, .act-jp, .citybar-name small, .popup-jp{color:var(--red)}
+.phrase .jpw{color:var(--red-deep)}
+.kpi-num{color:var(--red-deep)}
+.tally-count b{color:var(--red-deep)}
+.popup-btn{background:var(--red)}
+.footer-sub{color:#ffd7dd}
+.sync-pill.local{background:var(--red)}
