@@ -178,8 +178,55 @@ function init() {
   renderPractical();
   renderPhrases();
   applyEditMode();
+  setupNav();
+  setupReveal();
 
   Store.init((mode) => { setSyncIndicator(mode); renderAll(); });
+}
+
+/* ---------- Navigation : surlignage de section (scrollspy) ---------- */
+function setupNav() {
+  const links = [...$$(".nav a"), ...$$(".botnav a")];
+  const map = {};
+  links.forEach((a) => {
+    const id = a.getAttribute("href").slice(1);
+    (map[id] = map[id] || []).push(a);
+  });
+  const sections = ["tableau", "activites", "itineraire", "pratique"]
+    .map((id) => document.getElementById(id)).filter(Boolean);
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) {
+        links.forEach((a) => a.classList.remove("active"));
+        (map[e.target.id] || []).forEach((a) => a.classList.add("active"));
+      }
+    });
+  }, { rootMargin: "-45% 0px -50% 0px", threshold: 0 });
+  sections.forEach((s) => obs.observe(s));
+}
+
+/* ---------- Apparition au scroll ---------- */
+function setupReveal() {
+  if (!("IntersectionObserver" in window)) return;
+  const obs = new IntersectionObserver((entries, o) => {
+    entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); o.unobserve(e.target); } });
+  }, { rootMargin: "0px 0px -8% 0px", threshold: .08 });
+  $$(".map-card, .dash-side > .card, .city-progress, .section-head, .timeline, .practical-grid, .phrases")
+    .forEach((el) => { el.classList.add("reveal"); obs.observe(el); });
+}
+
+/* ---------- Compteur animé ---------- */
+function animateNumber(el, to) {
+  if (!el) return;
+  const from = parseInt(el.textContent, 10);
+  if (isNaN(from) || from === to) { el.textContent = to; return; }
+  const start = performance.now(), dur = 450;
+  const step = (t) => {
+    const k = Math.min(1, (t - start) / dur);
+    el.textContent = Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3)));
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 function buildMeSelect() {
@@ -368,9 +415,9 @@ function tagLabel(t) {
 
 function renderDashboard() {
   const acts = getActs();
-  $("#kpiActs").textContent = acts.length;
-  $("#kpiValid").textContent = acts.filter((a) => isValid(a.id)).length;
-  $("#kpiCities").textContent = TRIP.cities.length;
+  animateNumber($("#kpiActs"), acts.length);
+  animateNumber($("#kpiValid"), acts.filter((a) => isValid(a.id)).length);
+  animateNumber($("#kpiCities"), TRIP.cities.length);
 
   const counts = Object.fromEntries(MEMBERS.map((m) => [m, 0]));
   acts.forEach((a) => yesMembers(a.id).forEach((m) => counts[m]++));
@@ -431,6 +478,7 @@ function bindEditUI() {
     editMode = !editMode;
     localStorage.setItem(LS_EDIT, editMode ? "1" : "0");
     applyEditMode();
+    if (editMode) toast("✏️ Mode édition — tes modifs sont partagées avec le groupe");
   });
   $("#addActivityBtn").addEventListener("click", () => openActivityModal(null));
   $("#addItinBtn").addEventListener("click", () => openItinModal(null));
