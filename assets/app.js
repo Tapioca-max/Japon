@@ -667,19 +667,14 @@ function renderPlan() {
   const colors = cityColorMap();
   const wdShort = ["dim","lun","mar","mer","jeu","ven","sam"];
   const moShort = ["jan","fév","mar","avr","mai","juin","juil","août","sept","oct","nov","déc"];
+  const actCity = (id) => { const a = acts.find((x) => x.id === id); return a ? a.city : null; };
 
-  let rows = "", prevCity = "__none__";
-  for (let t = new Date(tripStart + "T00:00:00Z").getTime(); t <= new Date(tripEnd + "T00:00:00Z").getTime(); t += 86400000) {
-    const dk = isoUTC(t);
-    const d = new Date(t);
-    const c = cityForDay(dk);
-    const col = c ? colors[c.id] : "var(--ink-faint)";
-    const cid = c ? c.id : "__none__";
-    if (cid !== prevCity) {
-      rows += `<div class="agd-sep" style="--cc:${col}">${c ? `${c.name} ${c.jp?`<span class="jp">${c.jp}</span>`:""}` : "Retour"}</div>`;
-      prevCity = cid;
-    }
-    const entries = dayEntries(dk).map((e) => ({ e, a: acts.find((x) => x.id === e.id) })).filter((x) => x.a).sort((x, y) => slotMins(x.e) - slotMins(y.e));
+  const dayRow = (dk, c) => {
+    const d = new Date(dk + "T00:00:00Z");
+    const entries = dayEntries(dk)
+      .filter((e) => actCity(e.id) === c.id)
+      .map((e) => ({ e, a: acts.find((x) => x.id === e.id) })).filter((x) => x.a)
+      .sort((x, y) => slotMins(x.e) - slotMins(y.e));
     const items = entries.length
       ? entries.map(({ e, a }) => {
           const parts = yesMembers(a.id);
@@ -694,12 +689,20 @@ function renderPlan() {
         }).join("")
       : `<span class="day-free">Journée libre — clique pour ajouter</span>`;
     const flag = dk === tripEnd ? `<span class="agd-flag">✈️ Jour du départ</span>` : "";
-    rows += `<div class="agd-day" data-day="${dk}" style="--cc:${col}">
+    return `<div class="agd-day" data-day="${dk}" data-city="${c.id}" style="--cc:${colors[c.id]}">
         <div class="agd-date"><span class="agd-wd">${wdShort[d.getUTCDay()]}</span><span class="agd-num">${d.getUTCDate()}</span><span class="agd-mon">${moShort[d.getUTCMonth()]}</span></div>
         <div class="agd-body">${flag}${items}</div>
         <span class="agd-go">›</span>
       </div>`;
-  }
+  };
+
+  // agenda piloté par les villes : chaque ville (même un passage de 0 nuit) a sa section
+  let rows = "";
+  withDates.forEach((c) => {
+    const passage = !(c.departure && c.departure > c.arrival);
+    rows += `<div class="agd-sep" style="--cc:${colors[c.id]}">${c.name} ${c.jp?`<span class="jp">${c.jp}</span>`:""}${passage?` <span class="agd-passage">passage</span>`:""}</div>`;
+    cityDayList(c, tripEnd).forEach((dk) => { rows += dayRow(dk, c); });
+  });
 
   wrap.innerHTML = `
     <div class="plan-summary">
@@ -710,17 +713,35 @@ function renderPlan() {
     <div class="agenda">${rows}</div>`;
   $$(".agd-day", wrap).forEach((el) => el.addEventListener("click", (ev) => {
     if (ev.target.closest("a")) return;
-    openDayDetail(el.dataset.day);
+    openDayDetail(el.dataset.day, el.dataset.city);
   }));
 }
 
+// jours d'une ville : nuitées, + jour de départ si c'est la fin du voyage ; 0 nuit -> jour d'arrivée
+function cityDayList(c, tripEnd) {
+  if (!c.arrival) return [];
+  const start = new Date(c.arrival + "T00:00:00Z").getTime();
+  let end;
+  if (c.departure && c.departure > c.arrival) {
+    const dep = new Date(c.departure + "T00:00:00Z").getTime();
+    end = (c.departure === tripEnd) ? dep : dep - 86400000;
+  } else { end = start; }
+  const out = [];
+  for (let t = start; t <= end; t += 86400000) out.push(isoUTC(t));
+  return out;
+}
+
 /* ---------- Détail d'une journée (modale qui reste ouverte) ---------- */
-function openDayDetail(dk) {
-  const c = cityForDay(dk);
-  let work = dayEntries(dk);
+function openDayDetail(dk, cityId) {
+  const c = cityId ? getCities().find((x) => x.id === cityId) : cityForDay(dk);
+  const cid = c ? c.id : null;
+  const actCity = (id) => { const a = getActs().find((x) => x.id === id); return a ? a.city : null; };
+  const all = dayEntries(dk);
+  const others = cid ? all.filter((e) => actCity(e.id) !== cid) : [];
+  let work = cid ? all.filter((e) => actCity(e.id) === cid) : all;   // entrées de CETTE ville
   const root = $("#modalRoot");
   const close = () => { root.innerHTML = ""; };
-  const persist = () => Store.saveDayPlan(dk, work);
+  const persist = () => Store.saveDayPlan(dk, [...others, ...work]);
 
   function render() {
     const acts = getActs();
