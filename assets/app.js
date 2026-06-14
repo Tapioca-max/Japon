@@ -621,7 +621,14 @@ function slotShort(e) {
 }
 function isoUTC(t) { return new Date(t).toISOString().slice(0, 10); }
 function mondayOf(dk) { const d = new Date(dk + "T00:00:00Z"); const w = (d.getUTCDay() + 6) % 7; return d.getTime() - w * 86400000; }
-function cityForDay(dk) { return getCities().find((c) => c.arrival && c.arrival <= dk && (c.departure ? dk < c.departure : dk === c.arrival)) || null; }
+function cityForDay(dk) {
+  const cs = getCities().filter((c) => c.arrival);
+  // priorité aux séjours avec nuitée(s)
+  const stay = cs.find((c) => c.arrival <= dk && c.departure && dk < c.departure);
+  if (stay) return stay;
+  // sinon, ville sans nuit (arrivée == départ, ou sans date de départ) : son jour d'arrivée
+  return cs.find((c) => c.arrival === dk) || null;
+}
 function cityColorMap() {
   const pal = ["#d51f3f", "#3b6ea5", "#2f7d4f", "#7b3fa0", "#0e7490", "#d97706", "#c026a0", "#9a6a00"];
   const m = {}; getCities().forEach((c, i) => { m[c.id] = pal[i % pal.length]; }); return m;
