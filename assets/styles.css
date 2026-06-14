@@ -703,3 +703,25 @@ body{background-image:
 body::before{opacity:.38; background-size:40px 40px}
 .hero::after{opacity:.5}
 .hero .leaves span{font-size:1.05rem}
+
+/* ============================================================
+   v10 — Gestion des villes (ajout/édition) + ajustements
+   ============================================================ */
+.cp-head{display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap; margin-bottom:1rem}
+.cp-head h3{margin:0}
+.btn.add.sm{padding:.45rem .85rem; font-size:.8rem}
+
+.citybar-top{gap:.45rem}
+.citybar-name{flex:1; min-width:0}
+.citybar-admin{display:none; gap:.25rem; margin-left:.2rem}
+body.edit-mode .citybar-admin{display:inline-flex}
+.citybar-admin button{border:1px solid var(--line-2); background:#fff; border-radius:7px; width:25px; height:25px;
+  cursor:pointer; font-size:.72rem; line-height:1; padding:0}
+.citybar-admin button:active{transform:scale(.9)}
+
+#map.picking{cursor:crosshair}
+#map.picking::after{content:"📍 Clique pour placer la ville"; position:absolute; z-index:500; top:10px; left:50%;
+  transform:translateX(-50%); background:var(--red); color:#fff; padding:.35rem .8rem; border-radius:999px;
+  font-size:.8rem; font-weight:700; box-shadow:var(--sh); pointer-events:none}
+
+.modal-hint{font-size:.78rem; color:var(--ink-soft); margin:.1rem 0 0; font-style:italic}

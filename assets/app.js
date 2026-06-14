@@ -25,7 +25,14 @@ const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
 let votes = {};                                   // { actId: { member:true } }
-let catalog = { custom:{}, edits:{}, removed:{} }; // édition partagée du catalogue
+let catalog = normCatalog(null); // édition partagée : activités + villes
+function normCatalog(c) {
+  c = c || {};
+  return {
+    custom: c.custom || {}, edits: c.edits || {}, removed: c.removed || {},
+    cities: c.cities || {}, cityEdits: c.cityEdits || {}, cityRemoved: c.cityRemoved || {},
+  };
+}
 let itinOverride = null;                           // itinéraire édité (sinon TRIP.timeline)
 let me = localStorage.getItem(LS_ME) || "";
 let editMode = localStorage.getItem(LS_EDIT) === "1";
@@ -43,6 +50,20 @@ function getActs() {
   return out;
 }
 function getItinerary() { return itinOverride && itinOverride.length ? itinOverride : TRIP.timeline; }
+
+/* ---------- Villes effectives (base + villes ajoutées), triées par date ---------- */
+function getCities() {
+  const out = [];
+  TRIP.cities.forEach((c) => {
+    if (catalog.cityRemoved[c.id]) return;
+    out.push({ ...c, ...(catalog.cityEdits[c.id] || {}) });
+  });
+  Object.values(catalog.cities || {}).forEach((c) => {
+    if (c && c.id && !catalog.cityRemoved[c.id]) out.push(c);
+  });
+  return out.sort((a, b) => String(a.arrival || "9999").localeCompare(String(b.arrival || "9999")));
+}
+const isCustomCity = (id) => !!(catalog.cities && catalog.cities[id]);
 
 const yesMembers = (id) => MEMBERS.filter((m) => votes[id] && votes[id][m]);
 const countOf    = (id) => yesMembers(id).length;
@@ -67,10 +88,8 @@ const Store = {
 
   _loadLocal() {
     try { votes = JSON.parse(localStorage.getItem(LS_VOTES) || "{}"); } catch { votes = {}; }
-    try {
-      const c = JSON.parse(localStorage.getItem(LS_CATALOG) || "{}");
-      catalog = { custom: c.custom || {}, edits: c.edits || {}, removed: c.removed || {} };
-    } catch { catalog = { custom:{}, edits:{}, removed:{} }; }
+    try { catalog = normCatalog(JSON.parse(localStorage.getItem(LS_CATALOG) || "{}")); }
+    catch { catalog = normCatalog(null); }
     try { itinOverride = JSON.parse(localStorage.getItem(LS_ITIN) || "null"); } catch { itinOverride = null; }
   },
 
@@ -94,8 +113,7 @@ const Store = {
     onValue(ref(db, `rooms/${this._room}`), (snap) => {
       const v = snap.val() || {};
       votes = v.votes || {};
-      const c = v.catalog || {};
-      catalog = { custom: c.custom || {}, edits: c.edits || {}, removed: c.removed || {} };
+      catalog = normCatalog(v.catalog);
       itinOverride = v.itinerary ? normalizeArr(v.itinerary) : null;
       this._cb(this.mode);
     });
@@ -147,6 +165,34 @@ const Store = {
   },
   _persistCatalog() { localStorage.setItem(LS_CATALOG, JSON.stringify(catalog)); this._cb(this.mode); },
 
+  // ---- Villes ----
+  async saveCity(obj, isCustom) {
+    if (this.mode === "cloud") {
+      const { db, ref, set } = this._fb;
+      const path = isCustom ? `catalog/cities/${obj.id}` : `catalog/cityEdits/${obj.id}`;
+      await set(ref(db, `rooms/${this._room}/${path}`), obj);
+    } else {
+      if (isCustom) catalog.cities[obj.id] = obj; else catalog.cityEdits[obj.id] = obj;
+      this._persistCatalog();
+    }
+  },
+  async removeCity(id, isCustom) {
+    if (this.mode === "cloud") {
+      const { db, ref, set, remove } = this._fb;
+      if (isCustom) await remove(ref(db, `rooms/${this._room}/catalog/cities/${id}`));
+      else await set(ref(db, `rooms/${this._room}/catalog/cityRemoved/${id}`), true);
+    } else {
+      if (isCustom) delete catalog.cities[id]; else catalog.cityRemoved[id] = true;
+      this._persistCatalog();
+    }
+  },
+  async restoreCity(id) {
+    if (this.mode === "cloud") {
+      const { db, ref, remove } = this._fb;
+      await remove(ref(db, `rooms/${this._room}/catalog/cityRemoved/${id}`));
+    } else { delete catalog.cityRemoved[id]; this._persistCatalog(); }
+  },
+
   // ---- Itinéraire ----
   async saveItinerary(arr) {
     if (this.mode === "cloud") {
@@ -193,6 +239,8 @@ function showView(id) {
   [...$$(".nav a"), ...$$(".botnav a")].forEach((a) =>
     a.classList.toggle("active", a.getAttribute("href") === "#" + id));
   window.scrollTo(0, 0);
+  // Le bouton « Éditer » n'a de sens que sur les pages éditables (pas sur Infos)
+  $("#editToggle").style.display = (id === "pratique") ? "none" : "";
   // Leaflet a besoin d'un recalcul quand sa vue (re)devient visible
   if (id === "tableau" && map) setTimeout(() => map.invalidateSize(), 80);
 }
@@ -233,7 +281,7 @@ function buildMeSelect() {
 
 function buildHeroDates() {
   const fmt = (d) => new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" });
-  $("#heroDates").textContent = `${fmt(TRIP.period.start)} → ${fmt(TRIP.period.end)} · ${TRIP.cities.length} villes`;
+  $("#heroDates").textContent = `${fmt(TRIP.period.start)} → ${fmt(TRIP.period.end)} · ${getCities().length} villes`;
   updateCountdown();
 }
 
@@ -260,45 +308,56 @@ function setSyncIndicator(mode) {
 /* ============================================================
    CARTE
    ============================================================ */
-let map, cityMarkers = {}, routeLine;
+let map, cityLayer, _prevCityKey = "";
 function buildMap() {
   map = L.map("map", { scrollWheelZoom:false, zoomControl:true });
   L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
     { attribution:"© OpenStreetMap · © CARTO", maxZoom:18 }).addTo(map);
-  const pts = TRIP.cities.map((c) => [c.lat, c.lng]);
-  routeLine = L.polyline([...pts, pts[0]], { color:"#b3001b", weight:3, opacity:.7 }).addTo(map);
-  TRIP.cities.forEach((c, i) => {
-    const icon = L.divIcon({ className:"", html:`<div class="city-pin"><span>${i+1}</span></div>`, iconSize:[30,30], iconAnchor:[15,28] });
-    cityMarkers[c.id] = L.marker([c.lat, c.lng], { icon }).addTo(map);
-  });
+  cityLayer = L.layerGroup().addTo(map);
+  map.setView([35.4, 136.5], 5);
   map.on("popupopen", (e) => {
     const btn = e.popup._contentNode.querySelector(".popup-btn");
     if (btn) btn.addEventListener("click", () => { setCityFilter(btn.dataset.city); scrollToId("activites"); });
   });
-  map.fitBounds(pts, { padding:[40,40] });
 }
-function refreshMapPopups() {
-  const fmt = (d) => new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"short" });
-  TRIP.cities.forEach((c) => {
+
+// (re)dessine le tracé et les marqueurs depuis les villes effectives — s'adapte aux ajouts/éditions
+function renderMap() {
+  if (!map) return;
+  const cities = getCities();
+  cityLayer.clearLayers();
+  const pts = cities.map((c) => [c.lat, c.lng]);
+  if (pts.length > 1) L.polyline([...pts, pts[0]], { color:"#d51f3f", weight:3, opacity:.7 }).addTo(cityLayer);
+  const fmt = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"short" }) : "?";
+  cities.forEach((c, i) => {
+    const icon = L.divIcon({ className:"", html:`<div class="city-pin"><span>${i+1}</span></div>`, iconSize:[30,30], iconAnchor:[15,28] });
     const acts = cityActs(c.id), valid = acts.filter((a)=>isValid(a.id)).length;
-    cityMarkers[c.id].bindPopup(
-      `<div class="popup-city">${c.name} <span class="popup-jp">${c.jp}</span></div>
-       <div class="popup-meta">${fmt(c.arrival)} → ${fmt(c.departure)} · ${c.nights} nuit${c.nights>1?"s":""}<br>
+    L.marker([c.lat, c.lng], { icon }).addTo(cityLayer).bindPopup(
+      `<div class="popup-city">${c.name} ${c.jp?`<span class="popup-jp">${c.jp}</span>`:""}</div>
+       <div class="popup-meta">${fmt(c.arrival)} → ${fmt(c.departure)}${c.nights?` · ${c.nights} nuit${c.nights>1?"s":""}`:""}<br>
        <b>${valid}</b> validées / ${acts.length} idées</div>
        <button class="popup-btn" data-city="${c.id}">Voir les activités →</button>`);
   });
+  const key = cities.map((c) => c.id).join(",");
+  if (key !== _prevCityKey && pts.length) {
+    if (pts.length === 1) map.setView(pts[0], 9); else map.fitBounds(pts, { padding:[40,40] });
+    _prevCityKey = key;
+  }
 }
 
 /* ============================================================
    FILTRES
    ============================================================ */
 function buildFilters() {
-  $("#cityFilters").innerHTML =
-    `<button class="chip city active" data-city="all">Toutes</button>` +
-    TRIP.cities.map((c) => `<button class="chip city" data-city="${c.id}">${c.name}</button>`).join("");
   $("#catFilters").innerHTML =
     `<button class="chip cat active" data-cat="all">Toutes catégories</button>` +
     Object.entries(CATS).map(([k,v]) => `<button class="chip cat" data-cat="${k}" style="--catcolor:${v.color}">${v.emoji} ${v.label}</button>`).join("");
+}
+function renderCityFilters() {
+  if (!getCities().some((c) => c.id === filterState.city)) filterState.city = "all";
+  $("#cityFilters").innerHTML =
+    `<button class="chip city ${filterState.city==="all"?"active":""}" data-city="all">Toutes</button>` +
+    getCities().map((c) => `<button class="chip city ${filterState.city===c.id?"active":""}" data-city="${c.id}">${c.name}</button>`).join("");
 }
 function bindFilters() {
   $("#cityFilters").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (b) setCityFilter(b.dataset.city); });
@@ -327,7 +386,7 @@ function setCityFilter(city) {
 /* ============================================================
    RENDU
    ============================================================ */
-function renderAll() { renderActivities(); renderDashboard(); renderTimeline(); refreshMapPopups(); }
+function renderAll() { renderMap(); renderCityFilters(); renderActivities(); renderDashboard(); renderTimeline(); }
 
 function renderActivities() {
   const list = $("#activityList");
@@ -339,7 +398,7 @@ function renderActivities() {
     if (filterState.onlyValid && !isValid(a.id)) return false;
     if (filterState.hideVoted && me && votes[a.id] && votes[a.id][me]) return false;
     if (q) {
-      const city = TRIP.cities.find((c) => c.id === a.city);
+      const city = getCities().find((c) => c.id === a.city);
       const hay = norm([a.title, a.jp, a.desc, a.tip, a.warn, city && city.name, (a.tags||[]).join(" ")].join(" "));
       if (!hay.includes(q)) return false;
     }
@@ -362,14 +421,14 @@ function renderActivities() {
 }
 
 function mapsLink(a) {
-  const city = TRIP.cities.find((c) => c.id === a.city);
+  const city = getCities().find((c) => c.id === a.city);
   return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(`${a.title} ${city?city.name:""} Japan`);
 }
 
 function cardHTML(a) {
   const cat = CATS[a.cat] || { emoji:"📍", label:"", color:"#888" };
   const cnt = countOf(a.id), valid = cnt >= THRESHOLD;
-  const city = TRIP.cities.find((c) => c.id === a.city);
+  const city = getCities().find((c) => c.id === a.city);
   const notes =
     (a.tip  ? `<div class="act-note tip"><b>💡</b><span>${a.tip}</span></div>` : "") +
     (a.warn ? `<div class="act-note warn"><b>⚠️</b><span>${a.warn}</span></div>` : "");
@@ -423,7 +482,7 @@ function renderDashboard() {
   const acts = getActs();
   animateNumber($("#kpiActs"), acts.length);
   animateNumber($("#kpiValid"), acts.filter((a) => isValid(a.id)).length);
-  animateNumber($("#kpiCities"), TRIP.cities.length);
+  animateNumber($("#kpiCities"), getCities().length);
 
   const counts = Object.fromEntries(MEMBERS.map((m) => [m, 0]));
   acts.forEach((a) => yesMembers(a.id).forEach((m) => counts[m]++));
@@ -434,15 +493,26 @@ function renderDashboard() {
       <span class="m-bar"><span style="width:${(counts[m]/max)*100}%;background:${colorFor(m)}"></span></span>
       <span class="m-count">${counts[m]}</span></li>`).join("");
 
-  $("#cityBars").innerHTML = TRIP.cities.map((c) => {
+  $("#cityBars").innerHTML = getCities().map((c) => {
     const ca = cityActs(c.id), v = ca.filter((a) => isValid(a.id)).length;
     const pct = ca.length ? (v/ca.length)*100 : 0;
     return `<div class="citybar" data-city="${c.id}">
-      <div class="citybar-top"><span class="citybar-name">${c.name}<small>${c.jp}</small></span>
-      <span class="citybar-count">${v}/${ca.length}</span></div>
+      <div class="citybar-top">
+        <span class="citybar-name">${c.name}${c.jp?`<small>${c.jp}</small>`:""}</span>
+        <span class="citybar-count">${v}/${ca.length}</span>
+        <span class="citybar-admin">
+          <button class="city-edit" data-id="${c.id}" title="Modifier la ville">✏️</button>
+          <button class="city-del" data-id="${c.id}" title="Retirer la ville">🗑️</button>
+        </span>
+      </div>
       <div class="citybar-track"><span style="width:${pct}%"></span></div></div>`;
   }).join("");
-  $$("#cityBars .citybar").forEach((el) => el.addEventListener("click", () => { setCityFilter(el.dataset.city); scrollToId("activites"); }));
+  $$("#cityBars .citybar").forEach((el) => el.addEventListener("click", (e) => {
+    if (e.target.closest(".citybar-admin")) return;
+    setCityFilter(el.dataset.city); scrollToId("activites");
+  }));
+  $$("#cityBars .city-edit").forEach((b) => b.addEventListener("click", () => openCityModal(b.dataset.id)));
+  $$("#cityBars .city-del").forEach((b) => b.addEventListener("click", () => deleteCity(b.dataset.id)));
 }
 
 /* ---------- Itinéraire (éditable) ---------- */
@@ -493,6 +563,7 @@ function bindEditUI() {
   });
   $("#addActivityBtn").addEventListener("click", () => openActivityModal(null));
   $("#addItinBtn").addEventListener("click", () => openItinModal(null));
+  $("#addCityBtn").addEventListener("click", startCityPick);
 }
 function applyEditMode() {
   document.body.classList.toggle("edit-mode", editMode);
@@ -513,15 +584,88 @@ function deleteActivity(id) {
 function renderHiddenPanel() {
   const wrap = $("#hiddenPanel");
   if (!wrap) return;
-  const ids = Object.keys(catalog.removed || {}).filter((id) => catalog.removed[id]);
-  if (!editMode || ids.length === 0) { wrap.hidden = true; wrap.innerHTML = ""; return; }
+  const aIds = Object.keys(catalog.removed || {}).filter((id) => catalog.removed[id]);
+  const cIds = Object.keys(catalog.cityRemoved || {}).filter((id) => catalog.cityRemoved[id]);
+  if (!editMode || (aIds.length === 0 && cIds.length === 0)) { wrap.hidden = true; wrap.innerHTML = ""; return; }
   wrap.hidden = false;
-  wrap.innerHTML = `<span class="hp-label">Masquées :</span>` + ids.map((id) => {
-    const a = TRIP.activities.find((x) => x.id === id) || (catalog.custom[id]);
-    const name = a ? a.title : id;
-    return `<button class="hp-item" data-id="${id}">↩︎ ${name}</button>`;
-  }).join("");
-  $$(".hp-item", wrap).forEach((b) => b.addEventListener("click", () => { Store.restoreActivity(b.dataset.id); toast("Restaurée"); }));
+  const actBtns = aIds.map((id) => {
+    const a = TRIP.activities.find((x) => x.id === id) || catalog.custom[id];
+    return `<button class="hp-item" data-kind="act" data-id="${id}">↩︎ ${a ? a.title : id}</button>`;
+  });
+  const cityBtns = cIds.map((id) => {
+    const c = getCities().find((x) => x.id === id);
+    return `<button class="hp-item" data-kind="city" data-id="${id}">↩︎ ${c ? c.name : id} (ville)</button>`;
+  });
+  wrap.innerHTML = `<span class="hp-label">Masquées :</span>` + actBtns.join("") + cityBtns.join("");
+  $$(".hp-item", wrap).forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.kind === "city") Store.restoreCity(b.dataset.id);
+    else Store.restoreActivity(b.dataset.id);
+    toast("Restaurée");
+  }));
+}
+
+/* ---------- Villes : ajout / édition / suppression ---------- */
+function startCityPick() {
+  goView("tableau");
+  toast("📍 Clique sur la carte pour placer la nouvelle ville");
+  document.getElementById("map").classList.add("picking");
+  map.once("click", (e) => {
+    document.getElementById("map").classList.remove("picking");
+    openCityModal(null, e.latlng);
+  });
+}
+
+function openCityModal(id, latlng) {
+  const c = id ? (getCities().find((x) => x.id === id) || {}) : {};
+  const isNew = !id;
+  const lat = latlng ? latlng.lat.toFixed(4) : (c.lat != null ? c.lat : "");
+  const lng = latlng ? latlng.lng.toFixed(4) : (c.lng != null ? c.lng : "");
+  const body = `
+    <div class="row2">
+      <label>Nom de la ville*<input name="name" value="${esc(c.name)}" required></label>
+      <label>Nom japonais<input name="jp" value="${esc(c.jp)}" placeholder="例 : 札幌"></label>
+    </div>
+    <div class="row2">
+      <label>Arrivée*<input name="arrival" type="date" value="${esc(c.arrival)}" required></label>
+      <label>Départ<input name="departure" type="date" value="${esc(c.departure)}"></label>
+    </div>
+    <div class="row2">
+      <label>Nuits<input name="nights" type="number" min="0" value="${esc(c.nights)}"></label>
+      <label>&nbsp;<button type="button" class="btn ghost" id="repickBtn">📍 Placer sur la carte</button></label>
+    </div>
+    <div class="row2">
+      <label>Latitude*<input name="lat" value="${esc(lat)}" required></label>
+      <label>Longitude*<input name="lng" value="${esc(lng)}" required></label>
+    </div>
+    <p class="modal-hint">Astuce : le tracé sur la carte se réordonne selon la date d'arrivée.</p>`;
+  const root = openModal(isNew ? "Ajouter une ville" : "Modifier la ville", body, (form) => {
+    const name = form.name.value.trim();
+    const la = parseFloat(form.lat.value), ln = parseFloat(form.lng.value);
+    if (!name) { toast("Le nom est obligatoire"); return false; }
+    if (!form.arrival.value) { toast("La date d'arrivée est obligatoire"); return false; }
+    if (isNaN(la) || isNaN(ln)) { toast("Place la ville sur la carte (lat/lng)"); return false; }
+    const obj = {
+      id: isNew ? "city-" + Date.now().toString(36) : id,
+      name, jp: form.jp.value.trim(),
+      arrival: form.arrival.value, departure: form.departure.value,
+      nights: form.nights.value ? +form.nights.value : undefined,
+      lat: la, lng: ln,
+    };
+    Object.keys(obj).forEach((k) => { if (obj[k] === "" || obj[k] === undefined) delete obj[k]; });
+    obj.id = isNew ? obj.id : id; obj.name = name; obj.lat = la; obj.lng = ln; obj.arrival = form.arrival.value;
+    Store.saveCity(obj, isNew || isCustomCity(id));
+    toast(isNew ? "Ville ajoutée ✓" : "Ville modifiée ✓");
+  });
+  const rb = root.querySelector("#repickBtn");
+  if (rb) rb.addEventListener("click", () => { root.innerHTML = ""; startCityPick(); });
+}
+
+function deleteCity(id) {
+  const c = getCities().find((x) => x.id === id);
+  if (!c) return;
+  if (!confirm(`Retirer « ${c.name} » du voyage ?\n(Réversible ; les activités liées restent.)`)) return;
+  Store.removeCity(id, isCustomCity(id));
+  toast("Ville retirée");
 }
 
 /* ---------- Modale générique ---------- */
@@ -551,7 +695,7 @@ function openModal(title, bodyHTML, onSave) {
 function openActivityModal(id) {
   const a = id ? (getActs().find((x) => x.id === id) || {}) : {};
   const isNew = !id;
-  const cityOpts = TRIP.cities.map((c) => `<option value="${c.id}" ${a.city===c.id?"selected":""}>${c.name}</option>`).join("");
+  const cityOpts = getCities().map((c) => `<option value="${c.id}" ${a.city===c.id?"selected":""}>${c.name}</option>`).join("");
   const catOpts = Object.entries(CATS).map(([k,v]) => `<option value="${k}" ${a.cat===k?"selected":""}>${v.emoji} ${v.label}</option>`).join("");
   const allTags = ["incontournable","reservation","unesco","insolite","food","gratuit","fermeture"];
   const tagChecks = allTags.map((t) =>
