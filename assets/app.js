@@ -601,13 +601,20 @@ function renderPlan() {
       ? Object.entries(byCat).map(([k, list]) => `
           <div class="plan-cat">
             <span class="pc-emoji" title="${CATS[k]?.label||""}">${CATS[k]?.emoji || "📍"}</span>
-            <div class="pc-list">${list.map((a) => `
+            <div class="pc-list">${list.map((a) => {
+              const parts = yesMembers(a.id);
+              const partsHtml = parts.length === MEMBERS.length
+                ? `<span class="pc-all">👥 Tout le monde</span>`
+                : `<span class="pc-who">${parts.map((m) => `<span class="who-chip" style="--mc:${colorFor(m)}">${m}</span>`).join("")}</span>`;
+              return `
               <div class="pc-item">
                 <span class="pc-title">${a.title}</span>
                 ${(a.tags||[]).includes("reservation") ? `<span class="pc-tag">réservation</span>` : ""}
                 ${a.booking ? `<a class="pc-link" href="${a.booking}" target="_blank" rel="noopener">🎫</a>` : ""}
                 <a class="pc-link" href="${mapsLink(a)}" target="_blank" rel="noopener">📍</a>
-              </div>`).join("")}</div>
+                ${partsHtml}
+              </div>`;
+            }).join("")}</div>
           </div>`).join("")
       : `<p class="plan-empty">Aucune activité validée ici pour l'instant — <a href="#activites">votez !</a></p>`;
     const stepsHtml = steps.length

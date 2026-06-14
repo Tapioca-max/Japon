@@ -849,3 +849,12 @@ body.edit-mode .citybar-admin{display:inline-flex}
 .tl-acts{list-style:none; margin:.5rem 0 0; padding:.5rem .2rem 0; border-top:1px dashed var(--line); display:flex; flex-direction:column; gap:.25rem}
 .tl-acts li{font-size:.84rem; color:#3c3c47}
 .tl-acts .pc-link{text-decoration:none}
+
+/* ============================================================
+   v18 — Participants par activité sur le Plan
+   ============================================================ */
+.pc-who{display:inline-flex; flex-wrap:wrap; gap:.25rem; margin-left:.1rem}
+.who-chip{font-size:.66rem; font-weight:700; color:#fff; background:var(--mc,var(--red));
+  border-radius:99px; padding:.06rem .42rem; line-height:1.5}
+.pc-all{font-size:.68rem; font-weight:800; color:var(--ok); background:var(--ok-bg);
+  border-radius:99px; padding:.1rem .5rem}
