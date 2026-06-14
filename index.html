@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="assets/styles.css?v=10" />
+  <link rel="stylesheet" href="assets/styles.css?v=11" />
 </head>
 <body>
 
@@ -28,6 +28,7 @@
     <nav class="nav">
       <a href="#tableau">🗺️ Accueil</a>
       <a href="#activites">✓ Activités</a>
+      <a href="#plan">🗓️ Plan</a>
       <a href="#itineraire">📅 Itinéraire</a>
       <a href="#pratique">🎌 Infos</a>
     </nav>
@@ -139,6 +140,16 @@
     </div>
   </section>
 
+  <!-- ===================== VUE : PLAN DE VOYAGE ===================== -->
+  <section id="plan" class="section view">
+    <div class="section-head">
+      <p class="kicker">— Programme final —</p>
+      <h2>Plan de voyage <span class="jp">／ 旅のしおり</span></h2>
+      <p class="lead">Le récapitulatif jour par jour, ville par ville, construit à partir des activités <strong>validées</strong> (2+ votes) et de l'itinéraire.</p>
+    </div>
+    <div id="planContent"></div>
+  </section>
+
   <!-- ===================== VUE : PRATIQUE ===================== -->
   <section id="pratique" class="section view">
     <div class="section-head">
@@ -157,10 +168,11 @@
   </footer>
 
   <!-- Navigation mobile -->
-  <nav class="botnav" id="botnav">
+  <nav class="botnav botnav-5" id="botnav">
     <a href="#tableau" data-sec="tableau"><span>🗺️</span>Carte</a>
-    <a href="#activites" data-sec="activites"><span>✓</span>Activités</a>
-    <a href="#itineraire" data-sec="itineraire"><span>📅</span>Voyage</a>
+    <a href="#activites" data-sec="activites"><span>✓</span>Activ.</a>
+    <a href="#plan" data-sec="plan"><span>🗓️</span>Plan</a>
+    <a href="#itineraire" data-sec="itineraire"><span>📅</span>Étapes</a>
     <a href="#pratique" data-sec="pratique"><span>🎌</span>Infos</a>
   </nav>
 

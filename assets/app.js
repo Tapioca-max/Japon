@@ -232,15 +232,15 @@ function init() {
 }
 
 /* ---------- Routeur : une vue (page) à la fois ---------- */
-const VIEW_IDS = ["tableau", "activites", "itineraire", "pratique"];
+const VIEW_IDS = ["tableau", "activites", "plan", "itineraire", "pratique"];
 function showView(id) {
   if (!VIEW_IDS.includes(id)) id = "tableau";
   VIEW_IDS.forEach((v) => document.getElementById(v).classList.toggle("active", v === id));
   [...$$(".nav a"), ...$$(".botnav a")].forEach((a) =>
     a.classList.toggle("active", a.getAttribute("href") === "#" + id));
   window.scrollTo(0, 0);
-  // Le bouton « Éditer » n'a de sens que sur les pages éditables (pas sur Infos)
-  $("#editToggle").style.display = (id === "pratique") ? "none" : "";
+  // Le bouton « Éditer » n'a de sens que sur les pages éditables (ni Plan, ni Infos)
+  $("#editToggle").style.display = (id === "pratique" || id === "plan") ? "none" : "";
   // Leaflet a besoin d'un recalcul quand sa vue (re)devient visible
   if (id === "tableau" && map) setTimeout(() => map.invalidateSize(), 80);
 }
@@ -386,7 +386,7 @@ function setCityFilter(city) {
 /* ============================================================
    RENDU
    ============================================================ */
-function renderAll() { renderMap(); renderCityFilters(); renderActivities(); renderDashboard(); renderTimeline(); }
+function renderAll() { renderMap(); renderCityFilters(); renderActivities(); renderDashboard(); renderTimeline(); renderPlan(); }
 
 function renderActivities() {
   const list = $("#activityList");
@@ -540,6 +540,73 @@ function renderTimeline() {
   $$("#timeline .tl-up").forEach((b) => b.addEventListener("click", () => moveItin(+b.dataset.i, -1)));
   $$("#timeline .tl-down").forEach((b) => b.addEventListener("click", () => moveItin(+b.dataset.i, +1)));
   $$("#timeline .tl-add").forEach((b) => b.addEventListener("click", () => openItinModal(null, +b.dataset.at)));
+}
+
+/* ---------- Plan de voyage (validées + itinéraire, par ville/date) ---------- */
+function renderPlan() {
+  const wrap = $("#planContent");
+  if (!wrap) return;
+  const cities = getCities();
+  const acts = getActs();
+  const it = getItinerary();
+  const totalValid = acts.filter((a) => isValid(a.id)).length;
+  const reservations = acts.filter((a) => isValid(a.id) && (a.tags || []).includes("reservation"));
+  const fmt = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"long" }) : "?";
+
+  const resBanner = reservations.length ? `
+    <div class="plan-res">
+      <h3>🎫 À réserver à l'avance — ${reservations.length}</h3>
+      <ul>${reservations.map((a) => {
+        const c = getCities().find((x) => x.id === a.city);
+        return `<li><b>${a.title}</b>${c?` <span class="pr-city">${c.name}</span>`:""}${a.booking?` — <a href="${a.booking}" target="_blank" rel="noopener">réserver →</a>`:""}${a.warn?`<span class="pr-warn">${a.warn}</span>`:""}</li>`;
+      }).join("")}</ul>
+    </div>` : "";
+
+  const cityBlocks = cities.map((c, i) => {
+    const v = acts.filter((a) => a.city === c.id && isValid(a.id));
+    const pending = acts.filter((a) => a.city === c.id && !isValid(a.id)).length;
+    const steps = it.filter((t) => norm((t.title||"") + " " + (t.desc||"")).includes(norm(c.name)));
+    const byCat = {};
+    v.forEach((a) => { (byCat[a.cat] = byCat[a.cat] || []).push(a); });
+    const actsHtml = v.length
+      ? Object.entries(byCat).map(([k, list]) => `
+          <div class="plan-cat">
+            <span class="pc-emoji" title="${CATS[k]?.label||""}">${CATS[k]?.emoji || "📍"}</span>
+            <div class="pc-list">${list.map((a) => `
+              <div class="pc-item">
+                <span class="pc-title">${a.title}</span>
+                ${(a.tags||[]).includes("reservation") ? `<span class="pc-tag">réservation</span>` : ""}
+                ${a.booking ? `<a class="pc-link" href="${a.booking}" target="_blank" rel="noopener">🎫</a>` : ""}
+                <a class="pc-link" href="${mapsLink(a)}" target="_blank" rel="noopener">📍</a>
+              </div>`).join("")}</div>
+          </div>`).join("")
+      : `<p class="plan-empty">Aucune activité validée ici pour l'instant — <a href="#activites">votez !</a></p>`;
+    const stepsHtml = steps.length
+      ? `<div class="plan-days">${steps.map((t) => `<span class="plan-day"><b>${t.date}</b> · ${t.title}</span>`).join("")}</div>`
+      : "";
+    return `<article class="plan-city">
+      <div class="plan-city-head">
+        <span class="pch-num">${i+1}</span>
+        <div class="pch-info">
+          <h3>${c.name} ${c.jp?`<span class="jp">${c.jp}</span>`:""}</h3>
+          <span class="pch-meta">${fmt(c.arrival)} → ${fmt(c.departure)}${c.nights?` · ${c.nights} nuit${c.nights>1?"s":""}`:""}</span>
+        </div>
+        <span class="pch-count">${v.length}<small>validée${v.length>1?"s":""}</small></span>
+      </div>
+      ${stepsHtml}
+      ${actsHtml}
+      ${pending ? `<p class="plan-pending">＋ ${pending} idée${pending>1?"s":""} encore en attente de votes</p>` : ""}
+    </article>`;
+  }).join("");
+
+  wrap.innerHTML = `
+    <div class="plan-summary">
+      <span><b>${totalValid}</b> activités validées · <b>${cities.length}</b> villes</span>
+      <button class="btn ghost sm" id="printPlan">🖨️ Imprimer / PDF</button>
+    </div>
+    ${resBanner}
+    <div class="plan-cities">${cityBlocks}</div>`;
+  const pb = $("#printPlan"); if (pb) pb.addEventListener("click", () => window.print());
 }
 
 function renderPractical() {
