@@ -12,10 +12,13 @@
 
 window.JAPON_CONFIG = {
   firebase: {
-    // apiKey:      "AIza...........................",
-    // authDomain:  "japon-2026.firebaseapp.com",
-    // databaseURL: "https://japon-2026-default-rtdb.europe-west1.firebasedatabase.app",
-    // projectId:   "japon-2026",
+    apiKey:            "AIzaSyDmVFrAr6cBPxGGJvi2_8UHTgNPkGVKq2U",
+    authDomain:        "japonoue.firebaseapp.com",
+    databaseURL:       "https://japonoue-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId:         "japonoue",
+    storageBucket:     "japonoue.firebasestorage.app",
+    messagingSenderId: "1060509002757",
+    appId:             "1:1060509002757:web:8609911f8b2b0c203c406c",
   },
 
   // Identifiant de la "salle" de vote partagée (laissez tel quel,
