@@ -623,11 +623,14 @@ function isoUTC(t) { return new Date(t).toISOString().slice(0, 10); }
 function mondayOf(dk) { const d = new Date(dk + "T00:00:00Z"); const w = (d.getUTCDay() + 6) % 7; return d.getTime() - w * 86400000; }
 function cityForDay(dk) {
   const cs = getCities().filter((c) => c.arrival);
-  // priorité aux séjours avec nuitée(s)
+  // 1) séjour avec nuitée(s)
   const stay = cs.find((c) => c.arrival <= dk && c.departure && dk < c.departure);
   if (stay) return stay;
-  // sinon, ville sans nuit (arrivée == départ, ou sans date de départ) : son jour d'arrivée
-  return cs.find((c) => c.arrival === dk) || null;
+  // 2) jour d'arrivée (ville sans nuit, ou arrivée le jour même)
+  const arr = cs.find((c) => c.arrival === dk);
+  if (arr) return arr;
+  // 3) jour de départ (ex. vol le soir) : on reste rattaché à la ville quittée
+  return cs.find((c) => c.departure === dk) || null;
 }
 function cityColorMap() {
   const pal = ["#d51f3f", "#3b6ea5", "#2f7d4f", "#7b3fa0", "#0e7490", "#d97706", "#c026a0", "#9a6a00"];
@@ -690,9 +693,10 @@ function renderPlan() {
             </div>`;
         }).join("")
       : `<span class="day-free">Journée libre — clique pour ajouter</span>`;
+    const flag = dk === tripEnd ? `<span class="agd-flag">✈️ Jour du départ</span>` : "";
     rows += `<div class="agd-day" data-day="${dk}" style="--cc:${col}">
         <div class="agd-date"><span class="agd-wd">${wdShort[d.getUTCDay()]}</span><span class="agd-num">${d.getUTCDate()}</span><span class="agd-mon">${moShort[d.getUTCMonth()]}</span></div>
-        <div class="agd-body">${items}</div>
+        <div class="agd-body">${flag}${items}</div>
         <span class="agd-go">›</span>
       </div>`;
   }
