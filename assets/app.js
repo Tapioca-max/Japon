@@ -31,6 +31,7 @@ function normCatalog(c) {
   return {
     custom: c.custom || {}, edits: c.edits || {}, removed: c.removed || {},
     cities: c.cities || {}, cityEdits: c.cityEdits || {}, cityRemoved: c.cityRemoved || {},
+    dayPlan: c.dayPlan || {},
   };
 }
 let itinOverride = null;                           // itinéraire édité (sinon TRIP.timeline)
@@ -195,6 +196,18 @@ const Store = {
     } else { delete catalog.cityRemoved[id]; this._persistCatalog(); }
   },
 
+  // ---- Planning par jour (calendrier) ----
+  async saveDayPlan(dayKey, ids) {
+    if (this.mode === "cloud") {
+      const { db, ref, set, remove } = this._fb;
+      const r = ref(db, `rooms/${this._room}/catalog/dayPlan/${dayKey}`);
+      if (ids && ids.length) await set(r, ids); else await remove(r);
+    } else {
+      if (ids && ids.length) catalog.dayPlan[dayKey] = ids; else delete catalog.dayPlan[dayKey];
+      this._persistCatalog();
+    }
+  },
+
   // ---- Itinéraire ----
   async saveItinerary(arr) {
     if (this.mode === "cloud") {
@@ -241,8 +254,8 @@ function showView(id) {
   [...$$(".nav a"), ...$$(".botnav a")].forEach((a) =>
     a.classList.toggle("active", a.getAttribute("href") === "#" + id));
   window.scrollTo(0, 0);
-  // Le bouton « Éditer » n'a de sens que sur les pages éditables (ni Plan, ni Infos)
-  $("#editToggle").style.display = (id === "pratique" || id === "plan") ? "none" : "";
+  // Le bouton « Éditer » est masqué seulement sur Infos (rien à y éditer)
+  $("#editToggle").style.display = (id === "pratique") ? "none" : "";
   // Leaflet a besoin d'un recalcul quand sa vue (re)devient visible
   if (id === "tableau" && map) setTimeout(() => map.invalidateSize(), 80);
 }
@@ -572,67 +585,70 @@ function renderTimeline() {
 }
 
 /* ---------- Plan de voyage (validées + itinéraire, par ville/date) ---------- */
+/* ---------- Plan de voyage : calendrier (placer les validées par jour) ---------- */
+function cityDays(c) {
+  if (!c.arrival) return [];
+  const out = [];
+  const s = new Date(c.arrival + "T00:00:00Z").getTime();
+  const e = (c.departure ? new Date(c.departure + "T00:00:00Z") : new Date(c.arrival + "T00:00:00Z")).getTime();
+  for (let t = s; t < e; t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
+  if (!out.length) out.push(c.arrival);
+  return out;
+}
+const dayLabel = (dk) => new Date(dk + "T12:00:00").toLocaleDateString("fr-FR", { weekday:"short", day:"numeric", month:"short" });
+
 function renderPlan() {
   const wrap = $("#planContent");
   if (!wrap) return;
   const cities = getCities();
   const acts = getActs();
-  const it = getItinerary();
   const totalValid = acts.filter((a) => isValid(a.id)).length;
   const reservations = acts.filter((a) => isValid(a.id) && (a.tags || []).includes("reservation"));
-  const fmt = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"long" }) : "?";
+  const dayPlan = catalog.dayPlan || {};
+  const fmtL = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"long" }) : "?";
 
+  // — Bloc réservations (conservé) —
   const resBanner = reservations.length ? `
     <div class="plan-res">
       <h3>🎫 À réserver à l'avance — ${reservations.length}</h3>
       <ul>${reservations.map((a) => {
-        const c = getCities().find((x) => x.id === a.city);
+        const c = cities.find((x) => x.id === a.city);
         return `<li><b>${a.title}</b>${c?` <span class="pr-city">${c.name}</span>`:""}${a.booking?` — <a href="${a.booking}" target="_blank" rel="noopener">réserver →</a>`:""}${a.warn?`<span class="pr-warn">${a.warn}</span>`:""}</li>`;
       }).join("")}</ul>
     </div>` : "";
 
-  const cityBlocks = cities.map((c, i) => {
-    const v = acts.filter((a) => a.city === c.id && isValid(a.id));
-    const pending = acts.filter((a) => a.city === c.id && !isValid(a.id)).length;
-    const steps = it.filter((t) => norm((t.title||"") + " " + (t.desc||"")).includes(norm(c.name)));
-    const byCat = {};
-    v.forEach((a) => { (byCat[a.cat] = byCat[a.cat] || []).push(a); });
-    const actsHtml = v.length
-      ? Object.entries(byCat).map(([k, list]) => `
-          <div class="plan-cat">
-            <span class="pc-emoji" title="${CATS[k]?.label||""}">${CATS[k]?.emoji || "📍"}</span>
-            <div class="pc-list">${list.map((a) => {
-              const parts = yesMembers(a.id);
-              const partsHtml = parts.length === MEMBERS.length
-                ? `<span class="pc-all">👥 Tout le monde</span>`
-                : `<span class="pc-who">${parts.map((m) => `<span class="who-chip" style="--mc:${colorFor(m)}">${m}</span>`).join("")}</span>`;
-              return `
-              <div class="pc-item">
-                <span class="pc-title">${a.title}</span>
-                ${(a.tags||[]).includes("reservation") ? `<span class="pc-tag">réservation</span>` : ""}
-                ${a.booking ? `<a class="pc-link" href="${a.booking}" target="_blank" rel="noopener">🎫</a>` : ""}
-                <a class="pc-link" href="${mapsLink(a)}" target="_blank" rel="noopener">📍</a>
-                ${partsHtml}
-              </div>`;
-            }).join("")}</div>
-          </div>`).join("")
-      : `<p class="plan-empty">Aucune activité validée ici pour l'instant — <a href="#activites">votez !</a></p>`;
-    const stepsHtml = steps.length
-      ? `<div class="plan-days">${steps.map((t) => `<span class="plan-day"><b>${t.date}</b> · ${t.title}</span>`).join("")}</div>`
-      : "";
-    return `<article class="plan-city">
-      <div class="plan-city-head">
-        <span class="pch-num">${i+1}</span>
-        <div class="pch-info">
-          <h3>${c.name} ${c.jp?`<span class="jp">${c.jp}</span>`:""}</h3>
-          <span class="pch-meta">${fmt(c.arrival)} → ${fmt(c.departure)}${c.nights?` · ${c.nights} nuit${c.nights>1?"s":""}`:""}</span>
+  // — Calendrier par ville —
+  const calendar = cities.map((c, ci) => {
+    const cityValid = acts.filter((a) => a.city === c.id && isValid(a.id));
+    const days = cityDays(c);
+    const placed = new Set();
+    days.forEach((dk) => (dayPlan[dk] || []).forEach((id) => placed.add(id)));
+    const dayCards = days.map((dk) => {
+      const items = (dayPlan[dk] || []).map((id) => acts.find((a) => a.id === id)).filter(Boolean);
+      const chips = items.length
+        ? items.map((a) => `<span class="day-act">${CATS[a.cat]?.emoji||"📍"} ${a.title}
+            ${a.booking?`<a class="pc-link" href="${a.booking}" target="_blank" rel="noopener">🎫</a>`:""}
+            <button class="day-act-x" data-day="${dk}" data-id="${a.id}" title="Retirer">×</button></span>`).join("")
+        : `<span class="day-free">Journée libre</span>`;
+      return `<div class="day-card">
+          <div class="day-head">${dayLabel(dk)}</div>
+          <div class="day-acts">${chips}</div>
+          <button class="day-add btn add sm" data-day="${dk}" data-city="${c.id}">＋ Placer</button>
+        </div>`;
+    }).join("");
+    const pool = cityValid.filter((a) => !placed.has(a.id));
+    const poolHtml = pool.length
+      ? `<div class="day-pool"><span class="pool-lbl">À placer (${pool.length}) :</span>${pool.map((a) => `<span class="pool-chip">${CATS[a.cat]?.emoji||"📍"} ${a.title}</span>`).join("")}</div>`
+      : (cityValid.length ? `<div class="day-pool all-placed">✓ Toutes les validées sont placées</div>` : `<div class="day-pool">Aucune activité validée — <a href="#activites">votez !</a></div>`);
+    return `<section class="cal-city">
+        <div class="cal-city-head">
+          <span class="pch-num">${ci+1}</span>
+          <div class="pch-info"><h3>${c.name} ${c.jp?`<span class="jp">${c.jp}</span>`:""}</h3>
+            <span class="pch-meta">${fmtL(c.arrival)} → ${fmtL(c.departure)}${c.nights!=null?` · ${c.nights} nuit${c.nights>1?"s":""}`:""}</span></div>
         </div>
-        <span class="pch-count">${v.length}<small>validée${v.length>1?"s":""}</small></span>
-      </div>
-      ${stepsHtml}
-      ${actsHtml}
-      ${pending ? `<p class="plan-pending">＋ ${pending} idée${pending>1?"s":""} encore en attente de votes</p>` : ""}
-    </article>`;
+        <div class="day-grid">${dayCards || `<p class="plan-empty">Pas de nuit sur place.</p>`}</div>
+        ${poolHtml}
+      </section>`;
   }).join("");
 
   wrap.innerHTML = `
@@ -641,9 +657,33 @@ function renderPlan() {
       <button class="btn ghost sm" id="printPlan">🖨️ Imprimer / PDF</button>
     </div>
     ${resBanner}
-    <div class="plan-cities">${cityBlocks}</div>`;
+    <div class="cal">${calendar}</div>`;
   const pb = $("#printPlan"); if (pb) pb.addEventListener("click", () => window.print());
+  $$(".day-add", wrap).forEach((b) => b.addEventListener("click", () => openDayModal(b.dataset.day, b.dataset.city)));
+  $$(".day-act-x", wrap).forEach((b) => b.addEventListener("click", () => {
+    const ids = (catalog.dayPlan?.[b.dataset.day] || []).filter((id) => id !== b.dataset.id);
+    Store.saveDayPlan(b.dataset.day, ids);
+  }));
 }
+
+function openDayModal(dayKey, cityId) {
+  const list = getActs().filter((a) => a.city === cityId && isValid(a.id));
+  if (!list.length) { toast("Aucune activité validée pour cette ville"); return; }
+  const cur = new Set(catalog.dayPlan?.[dayKey] || []);
+  const body = `
+    <div class="actpick">
+      <span class="tagrow-lbl">Activités sur le ${dayLabel(dayKey)}</span>
+      <div class="actpick-list">${list.map((a) => `
+        <label class="actpick-item"><input type="checkbox" value="${a.id}" ${cur.has(a.id)?"checked":""}>
+          <span>${CATS[a.cat]?.emoji||"📍"} ${a.title}</span></label>`).join("")}</div>
+    </div>`;
+  openModal(`Journée du ${dayLabel(dayKey)}`, body, (form) => {
+    const ids = [...form.querySelectorAll('input[type="checkbox"]:checked')].map((c) => c.value);
+    Store.saveDayPlan(dayKey, ids);
+    toast("Journée mise à jour ✓");
+  });
+}
+
 
 function renderPractical() {
   $("#practicalGrid").innerHTML = TRIP.practical.map((p) =>
