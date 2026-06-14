@@ -525,7 +525,11 @@ function renderTimeline() {
   const belongs = (t, c) => t.cityId ? t.cityId === c.id
     : (!t.cityId && norm((t.title||"") + " " + (t.desc||"")).includes(norm(c.name)));
 
-  const stepLi = (t, i) => `
+  const stepLi = (t, i) => {
+    const assigned = (t.acts || []).map((aid) => getActs().find((a) => a.id === aid)).filter(Boolean);
+    const actsHtml = assigned.length ? `<ul class="tl-acts">${assigned.map((a) =>
+      `<li>${CATS[a.cat]?.emoji || "📍"} ${a.title}${a.booking?` <a class="pc-link" href="${a.booking}" target="_blank" rel="noopener">🎫</a>`:""}</li>`).join("")}</ul>` : "";
+    return `
     <li class="tl">
       <div class="tl-date"><span class="tl-d">${t.date}</span>${t.day?`<small>${t.day}</small>`:""}</div>
       <div class="tl-body">
@@ -533,9 +537,10 @@ function renderTimeline() {
           <button class="tl-edit" data-i="${i}" title="Modifier">✏️</button>
           <button class="tl-del" data-i="${i}" title="Supprimer">🗑️</button>
         </div>
-        <h4>${t.title}</h4>${t.desc?`<p>${t.desc}</p>`:""}
+        <h4>${t.title}</h4>${t.desc?`<p>${t.desc}</p>`:""}${actsHtml}
       </div>
     </li>`;
+  };
   const cityLi = (c, i) => `
     <li class="tl tl-city">
       <div class="tl-date"></div>
@@ -883,6 +888,7 @@ function openItinModal(i, insertAt, cityId) {
   const title = isEdit ? "Modifier l'étape" : "Ajouter une étape";
   const cityOpts = `<option value="">— aucune —</option>` +
     getCities().map((c) => `<option value="${c.id}" ${selCity===c.id?"selected":""}>${c.name}</option>`).join("");
+  const picked = new Set(step.acts || []);
   const body = `
     <div class="row2">
       <label>Dates*<input name="date" value="${esc(step.date)}" placeholder="22-24 sept" required></label>
@@ -890,19 +896,44 @@ function openItinModal(i, insertAt, cityId) {
     </div>
     <label>Titre*<input name="title" value="${esc(step.title)}" required></label>
     <label>Ville (rattachement dans le fil)<select name="city">${cityOpts}</select></label>
-    <label>Détail<textarea name="desc" rows="3">${esc(step.desc)}</textarea></label>`;
-  openModal(title, body, (form) => {
+    <label>Détail<textarea name="desc" rows="3">${esc(step.desc)}</textarea></label>
+    <div class="actpick">
+      <span class="tagrow-lbl">Activités validées à rattacher</span>
+      <div class="actpick-list" id="actPickList"></div>
+    </div>`;
+  const root = openModal(title, body, (form) => {
     const date = form.date.value.trim(), ttl = form.title.value.trim();
     if (!date || !ttl) { toast("Dates et titre obligatoires"); return false; }
     const next = getItinerary().map((x) => ({ ...x }));
     const obj = { date, day: form.day.value.trim(), title: ttl, desc: form.desc.value.trim() };
     if (form.city.value) obj.cityId = form.city.value;
+    if (picked.size) obj.acts = [...picked];
     if (isEdit) next[i] = obj;
     else if (insertAt != null) next.splice(insertAt, 0, obj);
     else next.push(obj);
     Store.saveItinerary(next);
     toast(isEdit ? "Étape modifiée ✓" : "Étape ajoutée ✓");
   });
+  const form = root.querySelector(".modal-body");
+  const pickEl = root.querySelector("#actPickList");
+  renderActPicker(pickEl, selCity || "", picked);
+  form.city.addEventListener("change", () => renderActPicker(pickEl, form.city.value, picked));
+}
+
+// liste de cases à cocher des activités validées (filtrée par ville)
+function renderActPicker(container, cityId, picked) {
+  const list = getActs().filter((a) => isValid(a.id) && (!cityId || a.city === cityId));
+  if (!list.length) {
+    container.innerHTML = `<p class="actpick-empty">Aucune activité validée${cityId ? " pour cette ville" : ""} pour l'instant — il en faut au moins 2 votes.</p>`;
+    return;
+  }
+  container.innerHTML = list.map((a) => `
+    <label class="actpick-item">
+      <input type="checkbox" value="${a.id}" ${picked.has(a.id) ? "checked" : ""}>
+      <span>${CATS[a.cat]?.emoji || "📍"} ${a.title}</span>
+    </label>`).join("");
+  container.querySelectorAll('input[type="checkbox"]').forEach((cb) =>
+    cb.addEventListener("change", () => { cb.checked ? picked.add(cb.value) : picked.delete(cb.value); }));
 }
 function deleteItin(i) {
   const it = getItinerary();

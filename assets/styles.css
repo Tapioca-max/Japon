@@ -835,3 +835,17 @@ body.edit-mode .citybar-admin{display:inline-flex}
 .tl-transit{align-items:center; padding:.15rem 0}
 .tl-transit .tt{font-family:var(--round); font-size:.82rem; font-weight:700; color:var(--red);
   background:#fff; border:1px dashed var(--red); border-radius:99px; padding:.22rem .75rem; display:inline-block}
+
+/* ============================================================
+   v17 — Rattacher des activités validées à une étape
+   ============================================================ */
+.actpick{display:flex; flex-direction:column; gap:.4rem}
+.actpick-list{display:flex; flex-direction:column; gap:.3rem; max-height:200px; overflow:auto;
+  border:1px solid var(--line-2); border-radius:12px; padding:.5rem .6rem; background:#fff}
+.actpick-item{flex-direction:row !important; align-items:center; gap:.5rem !important; font-weight:500 !important;
+  color:var(--ink) !important; font-size:.88rem !important; cursor:pointer}
+.actpick-item input{width:auto !important; accent-color:var(--red); flex:0 0 auto}
+.actpick-empty{font-size:.82rem; color:var(--ink-soft); font-style:italic; margin:0}
+.tl-acts{list-style:none; margin:.5rem 0 0; padding:.5rem .2rem 0; border-top:1px dashed var(--line); display:flex; flex-direction:column; gap:.25rem}
+.tl-acts li{font-size:.84rem; color:#3c3c47}
+.tl-acts .pc-link{text-decoration:none}
