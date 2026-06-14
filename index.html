@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>日本旅行 2026 · Guide & Votes</title>
+  <meta name="description" content="Guide de voyage au Japon (sept-oct 2026) et sélection d'activités par vote — Sacha, Manon, Raph, Ivo." />
+
+  <!-- Leaflet (carte) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700;800&family=Noto+Sans+JP:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+
+  <!-- ===================== EN-TÊTE / NAV ===================== -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-jp">日本旅行</span>
+      <span class="brand-sub">Japon · 2026</span>
+    </div>
+    <nav class="nav">
+      <a href="#tableau">Carte</a>
+      <a href="#activites">Activités</a>
+      <a href="#itineraire">Itinéraire</a>
+      <a href="#pratique">Pratique</a>
+    </nav>
+    <div class="me" id="meBox">
+      <span class="me-label">Je suis</span>
+      <select id="meSelect" aria-label="Qui es-tu ?"></select>
+      <span class="sync-pill" id="syncPill" title="Mode de synchronisation">·</span>
+    </div>
+  </header>
+
+  <!-- ===================== PAGE 1 : OUTIL VISUEL ===================== -->
+  <section id="tableau" class="hero">
+    <div class="hero-head">
+      <p class="kicker">— Tableau de bord du voyage —</p>
+      <h1>Mon itinéraire <span class="jp">／ 私の旅程</span></h1>
+      <p class="hero-dates" id="heroDates"></p>
+    </div>
+
+    <div class="dash-grid">
+      <!-- Carte interactive -->
+      <div class="card map-card">
+        <div id="map"></div>
+        <div class="map-legend">
+          <span class="legend-line"></span> Train · Shinkansen
+          <span class="legend-hint">Cliquez une ville pour voir ses activités</span>
+        </div>
+      </div>
+
+      <!-- Colonne stats -->
+      <aside class="dash-side">
+        <div class="card countdown">
+          <span class="cd-label">Départ dans</span>
+          <span class="cd-value" id="cdValue">—</span>
+          <span class="cd-unit">jours</span>
+          <span class="cd-sub" id="cdSub"></span>
+        </div>
+
+        <div class="card kpis">
+          <div class="kpi"><span class="kpi-num" id="kpiActs">0</span><span class="kpi-lbl">activités</span></div>
+          <div class="kpi ok"><span class="kpi-num" id="kpiValid">0</span><span class="kpi-lbl">validées <small>(2+ votes)</small></span></div>
+          <div class="kpi"><span class="kpi-num" id="kpiCities">7</span><span class="kpi-lbl">villes</span></div>
+        </div>
+
+        <div class="card members-card">
+          <h3>Votes par membre</h3>
+          <ul class="members-list" id="membersList"></ul>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Progression par ville -->
+    <div class="card city-progress">
+      <h3>Sélection par étape</h3>
+      <div class="citybars" id="cityBars"></div>
+    </div>
+  </section>
+
+  <!-- ===================== ACTIVITÉS / VOTE ===================== -->
+  <section id="activites" class="section">
+    <div class="section-head">
+      <p class="kicker">— Sélection des activités —</p>
+      <h2>Votez, on tranche <span class="jp">／ 投票</span></h2>
+      <p class="lead">Chaque membre clique sur son prénom pour voter. <strong>2 votes ou plus</strong> = activité <span class="badge-inline">✓ Validée</span> et ajoutée au programme.</p>
+    </div>
+
+    <div class="filters" id="filters">
+      <div class="filter-group" id="cityFilters"></div>
+      <div class="filter-group" id="catFilters"></div>
+      <div class="filter-toggles">
+        <label class="switch"><input type="checkbox" id="onlyValid"> Validées seulement</label>
+        <label class="switch"><input type="checkbox" id="hideVoted"> Masquer où j'ai voté</label>
+      </div>
+    </div>
+
+    <div id="activityList" class="activity-list"></div>
+    <p class="empty" id="emptyMsg" hidden>Aucune activité ne correspond à ces filtres.</p>
+  </section>
+
+  <!-- ===================== ITINÉRAIRE ===================== -->
+  <section id="itineraire" class="section alt">
+    <div class="section-head">
+      <p class="kicker">— Jour par jour —</p>
+      <h2>L'itinéraire <span class="jp">／ 旅程</span></h2>
+    </div>
+    <ol class="timeline" id="timeline"></ol>
+  </section>
+
+  <!-- ===================== PRATIQUE ===================== -->
+  <section id="pratique" class="section">
+    <div class="section-head">
+      <p class="kicker">— Survival kit —</p>
+      <h2>Infos pratiques <span class="jp">／ 実用情報</span></h2>
+    </div>
+    <div class="practical-grid" id="practicalGrid"></div>
+
+    <h3 class="phrases-title">日本語 · Phrases utiles</h3>
+    <div class="phrases" id="phrases"></div>
+  </section>
+
+  <footer class="footer">
+    <p>日本旅行 · Automne 2026 — Sacha · Manon · Raph · Ivo</p>
+    <p class="footer-sub">良い旅を ! — Bon voyage. <span id="footerSync"></span></p>
+  </footer>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" hidden></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="assets/config.js"></script>
+  <script src="assets/data.js"></script>
+  <script type="module" src="assets/app.js"></script>
+</body>
+</html>
