@@ -26,10 +26,10 @@
       <span class="brand-sub">Japon · 2026</span>
     </div>
     <nav class="nav">
-      <a href="#tableau">Carte</a>
-      <a href="#activites">Activités</a>
-      <a href="#itineraire">Itinéraire</a>
-      <a href="#pratique">Pratique</a>
+      <a href="#tableau">🗺️ Accueil</a>
+      <a href="#activites">✓ Activités</a>
+      <a href="#itineraire">📅 Itinéraire</a>
+      <a href="#pratique">🎌 Infos</a>
     </nav>
     <div class="me" id="meBox">
       <button id="editToggle" class="edit-toggle" title="Activer le mode édition">✏️ Éditer</button>
@@ -39,11 +39,11 @@
     </div>
   </header>
 
-  <!-- ===================== PAGE 1 : OUTIL VISUEL ===================== -->
-  <section id="tableau" class="hero">
+  <!-- ===================== VUE : ACCUEIL / CARTE ===================== -->
+  <section id="tableau" class="hero view active">
     <div class="hero-head">
       <p class="kicker">— Tableau de bord du voyage —</p>
-      <h1>Mon itinéraire <span class="jp">／ 私の旅程</span></h1>
+      <h1>Notre voyage <span class="jp">／ 私たちの旅</span></h1>
       <p class="hero-dates" id="heroDates"></p>
     </div>
 
@@ -84,10 +84,15 @@
       <h3>Sélection par étape</h3>
       <div class="citybars" id="cityBars"></div>
     </div>
+
+    <div class="home-cta">
+      <a href="#activites" class="btn primary lg">✓ Voter pour les activités →</a>
+      <a href="#itineraire" class="btn ghost lg">📅 Voir l'itinéraire</a>
+    </div>
   </section>
 
-  <!-- ===================== ACTIVITÉS / VOTE ===================== -->
-  <section id="activites" class="section">
+  <!-- ===================== VUE : ACTIVITÉS / VOTE ===================== -->
+  <section id="activites" class="section view">
     <div class="section-head">
       <p class="kicker">— Sélection des activités —</p>
       <h2>Votez, on tranche <span class="jp">／ 投票</span></h2>
@@ -113,8 +118,8 @@
     <p class="empty" id="emptyMsg" hidden>Aucune activité ne correspond à ces filtres.</p>
   </section>
 
-  <!-- ===================== ITINÉRAIRE ===================== -->
-  <section id="itineraire" class="section alt">
+  <!-- ===================== VUE : ITINÉRAIRE ===================== -->
+  <section id="itineraire" class="section view">
     <div class="section-head">
       <p class="kicker">— Jour par jour —</p>
       <h2>L'itinéraire <span class="jp">／ 旅程</span></h2>
@@ -125,8 +130,8 @@
     </div>
   </section>
 
-  <!-- ===================== PRATIQUE ===================== -->
-  <section id="pratique" class="section">
+  <!-- ===================== VUE : PRATIQUE ===================== -->
+  <section id="pratique" class="section view">
     <div class="section-head">
       <p class="kicker">— Survival kit —</p>
       <h2>Infos pratiques <span class="jp">／ 実用情報</span></h2>

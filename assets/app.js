@@ -178,41 +178,32 @@ function init() {
   renderPractical();
   renderPhrases();
   applyEditMode();
-  setupNav();
-  setupReveal();
+  setupRouter();
 
   Store.init((mode) => { setSyncIndicator(mode); renderAll(); });
 }
 
-/* ---------- Navigation : surlignage de section (scrollspy) ---------- */
-function setupNav() {
-  const links = [...$$(".nav a"), ...$$(".botnav a")];
-  const map = {};
-  links.forEach((a) => {
-    const id = a.getAttribute("href").slice(1);
-    (map[id] = map[id] || []).push(a);
-  });
-  const sections = ["tableau", "activites", "itineraire", "pratique"]
-    .map((id) => document.getElementById(id)).filter(Boolean);
-  const obs = new IntersectionObserver((entries) => {
-    entries.forEach((e) => {
-      if (e.isIntersecting) {
-        links.forEach((a) => a.classList.remove("active"));
-        (map[e.target.id] || []).forEach((a) => a.classList.add("active"));
-      }
-    });
-  }, { rootMargin: "-45% 0px -50% 0px", threshold: 0 });
-  sections.forEach((s) => obs.observe(s));
+/* ---------- Routeur : une vue (page) à la fois ---------- */
+const VIEW_IDS = ["tableau", "activites", "itineraire", "pratique"];
+function showView(id) {
+  if (!VIEW_IDS.includes(id)) id = "tableau";
+  VIEW_IDS.forEach((v) => document.getElementById(v).classList.toggle("active", v === id));
+  [...$$(".nav a"), ...$$(".botnav a")].forEach((a) =>
+    a.classList.toggle("active", a.getAttribute("href") === "#" + id));
+  window.scrollTo(0, 0);
+  // Leaflet a besoin d'un recalcul quand sa vue (re)devient visible
+  if (id === "tableau" && map) setTimeout(() => map.invalidateSize(), 80);
 }
-
-/* ---------- Apparition au scroll ---------- */
-function setupReveal() {
-  if (!("IntersectionObserver" in window)) return;
-  const obs = new IntersectionObserver((entries, o) => {
-    entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); o.unobserve(e.target); } });
-  }, { rootMargin: "0px 0px -8% 0px", threshold: .08 });
-  $$(".map-card, .dash-side > .card, .city-progress, .section-head, .timeline, .practical-grid, .phrases")
-    .forEach((el) => { el.classList.add("reveal"); obs.observe(el); });
+function goView(id) { if (location.hash.slice(1) === id) showView(id); else location.hash = id; }
+function setupRouter() {
+  // délégation : tout lien #vue (nav, barre du bas, boutons internes) change de page
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="#"]'); if (!a) return;
+    const id = a.getAttribute("href").slice(1);
+    if (VIEW_IDS.includes(id)) { e.preventDefault(); goView(id); }
+  });
+  window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
+  showView(location.hash.slice(1) || "tableau");
 }
 
 /* ---------- Compteur animé ---------- */
@@ -623,7 +614,7 @@ function moveItin(i, dir) {
    Utils
    ============================================================ */
 function esc(s) { return (s == null ? "" : String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-function scrollToId(id) { document.getElementById(id).scrollIntoView({ behavior:"smooth" }); }
+function scrollToId(id) { goView(id); }   // navigue vers la vue correspondante
 
 let toastTimer;
 function toast(msg) {
