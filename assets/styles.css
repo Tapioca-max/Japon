@@ -789,3 +789,7 @@ body.edit-mode .citybar-admin{display:inline-flex}
 .confirm-msg{font-size:.96rem; color:var(--ink); line-height:1.55; margin:0}
 .confirm-msg b{color:var(--red)}
 .confirm-sub{display:block; font-size:.8rem; color:var(--ink-soft); margin-top:.6rem}
+
+/* v14 — champ "nuits" auto-calculé */
+.lbl-auto{font-weight:400; color:var(--ink-faint); text-transform:none; letter-spacing:0}
+.modal-body input[readonly]{background:var(--paper-2); color:var(--ink-soft); cursor:not-allowed}

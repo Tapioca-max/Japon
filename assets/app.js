@@ -59,8 +59,10 @@ function getCities() {
     out.push({ ...c, ...(catalog.cityEdits[c.id] || {}) });
   });
   Object.values(catalog.cities || {}).forEach((c) => {
-    if (c && c.id && !catalog.cityRemoved[c.id]) out.push(c);
+    if (c && c.id && !catalog.cityRemoved[c.id]) out.push({ ...c });
   });
+  // nombre de nuits dérivé des dates (départ − arrivée)
+  out.forEach((c) => { const n = nightsBetween(c.arrival, c.departure); if (n != null) c.nights = n; });
   return out.sort((a, b) => String(a.arrival || "9999").localeCompare(String(b.arrival || "9999")));
 }
 const isCustomCity = (id) => !!(catalog.cities && catalog.cities[id]);
@@ -717,25 +719,26 @@ function openCityModal(id, latlng) {
       <label>Départ<input name="departure" type="date" value="${esc(c.departure)}"></label>
     </div>
     <div class="row2">
-      <label>Nuits<input name="nights" type="number" min="0" value="${esc(c.nights)}"></label>
+      <label>Nuits <small class="lbl-auto">(calculées)</small><input name="nights" type="number" min="0" value="${esc(c.nights)}" readonly></label>
       <label>&nbsp;<button type="button" class="btn ghost" id="repickBtn">📍 Placer sur la carte</button></label>
     </div>
     <div class="row2">
       <label>Latitude*<input name="lat" value="${esc(lat)}" required></label>
       <label>Longitude*<input name="lng" value="${esc(lng)}" required></label>
     </div>
-    <p class="modal-hint">Astuce : le tracé sur la carte se réordonne selon la date d'arrivée.</p>`;
+    <p class="modal-hint">Le nombre de nuits se calcule automatiquement (départ − arrivée). Le tracé se réordonne selon la date d'arrivée.</p>`;
   const root = openModal(isNew ? "Ajouter une ville" : "Modifier la ville", body, (form) => {
     const name = form.name.value.trim();
     const la = parseFloat(form.lat.value), ln = parseFloat(form.lng.value);
     if (!name) { toast("Le nom est obligatoire"); return false; }
     if (!form.arrival.value) { toast("La date d'arrivée est obligatoire"); return false; }
     if (isNaN(la) || isNaN(ln)) { toast("Place la ville sur la carte (lat/lng)"); return false; }
+    const nights = nightsBetween(form.arrival.value, form.departure.value);
     const obj = {
       id: isNew ? "city-" + Date.now().toString(36) : id,
       name, jp: form.jp.value.trim(),
       arrival: form.arrival.value, departure: form.departure.value,
-      nights: form.nights.value ? +form.nights.value : undefined,
+      nights: nights != null ? nights : undefined,
       lat: la, lng: ln,
     };
     Object.keys(obj).forEach((k) => { if (obj[k] === "" || obj[k] === undefined) delete obj[k]; });
@@ -743,8 +746,19 @@ function openCityModal(id, latlng) {
     Store.saveCity(obj, isNew || isCustomCity(id));
     toast(isNew ? "Ville ajoutée ✓" : "Ville modifiée ✓");
   });
+  // nuits = départ − arrivée, recalculé en direct
+  const form = root.querySelector(".modal-body");
+  const recompute = () => { const n = nightsBetween(form.arrival.value, form.departure.value); form.nights.value = n != null ? n : ""; };
+  form.arrival.addEventListener("change", recompute);
+  form.departure.addEventListener("change", recompute);
+  recompute();
   const rb = root.querySelector("#repickBtn");
   if (rb) rb.addEventListener("click", () => { root.innerHTML = ""; startCityPick(); });
+}
+function nightsBetween(arrival, departure) {
+  if (!arrival || !departure) return null;
+  const n = Math.round((new Date(departure) - new Date(arrival)) / 86400000);
+  return n >= 0 ? n : null;
 }
 
 function deleteCity(id) {
