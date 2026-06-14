@@ -693,3 +693,13 @@ body::before{
 .popup-btn{background:var(--red)}
 .footer-sub{color:#ffd7dd}
 .sync-pill.local{background:var(--red)}
+
+/* ============================================================
+   v9 — Atténuation du fond (motif, rayons, halos plus discrets)
+   ============================================================ */
+body{background-image:
+  radial-gradient(55vw 38vw at 6% -6%, rgba(213,31,63,.03), transparent 62%),
+  radial-gradient(50vw 38vw at 100% 0%, rgba(213,31,63,.025), transparent 58%);}
+body::before{opacity:.38; background-size:40px 40px}
+.hero::after{opacity:.5}
+.hero .leaves span{font-size:1.05rem}
