@@ -643,9 +643,29 @@ function applyEditMode() {
 function deleteActivity(id) {
   const a = getActs().find((x) => x.id === id) || TRIP.activities.find((x) => x.id === id);
   if (!a) return;
-  if (!confirm(`Supprimer « ${a.title} » de la liste ?\n(Les votes existants sont conservés ; tu pourras la restaurer.)`)) return;
-  Store.removeActivity(id, !!catalog.custom[id]);
-  toast("Activité supprimée");
+  confirmDialog({
+    title: `Supprimer « ${a.title} » ?`,
+    message: `L'activité sera retirée de la liste.<span class="confirm-sub">Les votes sont conservés ; tu pourras la restaurer.</span>`,
+    confirmLabel: "Supprimer", danger: true,
+    onConfirm: () => { Store.removeActivity(id, !!catalog.custom[id]); toast("Activité supprimée"); },
+  });
+}
+
+/* Confirmation intégrée (remplace le popup natif du navigateur) */
+function confirmDialog({ title, message, confirmLabel = "Confirmer", danger = false, onConfirm }) {
+  const root = $("#modalRoot");
+  root.innerHTML = `<div class="modal-overlay"><div class="modal modal-confirm">
+    <div class="modal-head"><h3>${title}</h3><button class="modal-x" aria-label="Fermer">✕</button></div>
+    <div class="modal-body"><p class="confirm-msg">${message}</p></div>
+    <div class="modal-foot">
+      <button type="button" class="btn ghost" data-act="cancel">Annuler</button>
+      <button type="button" class="btn ${danger ? "danger" : "primary"}" data-act="ok">${confirmLabel}</button>
+    </div></div></div>`;
+  const close = () => { root.innerHTML = ""; };
+  root.querySelector(".modal-x").onclick = close;
+  root.querySelector('[data-act="cancel"]').onclick = close;
+  root.querySelector(".modal-overlay").onclick = (e) => { if (e.target.classList.contains("modal-overlay")) close(); };
+  root.querySelector('[data-act="ok"]').onclick = () => { close(); if (onConfirm) onConfirm(); };
 }
 
 function renderHiddenPanel() {
@@ -730,9 +750,21 @@ function openCityModal(id, latlng) {
 function deleteCity(id) {
   const c = getCities().find((x) => x.id === id);
   if (!c) return;
-  if (!confirm(`Retirer « ${c.name} » du voyage ?\n(Réversible ; les activités liées restent.)`)) return;
-  Store.removeCity(id, isCustomCity(id));
-  toast("Ville retirée");
+  const attached = getActs().filter((a) => a.city === id);
+  const n = attached.length;
+  confirmDialog({
+    title: `Supprimer « ${c.name} » ?`,
+    message: n > 0
+      ? `Cette ville et ses <b>${n} activité${n>1?"s":""} associée${n>1?"s":""}</b> seront retirées du voyage.<span class="confirm-sub">Les votes sont conservés ; les activités du guide pourront être restaurées.</span>`
+      : `Cette ville sera retirée du voyage.<span class="confirm-sub">Réversible depuis le panneau « Masquées ».</span>`,
+    confirmLabel: n > 0 ? `Supprimer (ville + ${n})` : "Supprimer la ville",
+    danger: true,
+    onConfirm: () => {
+      attached.forEach((a) => Store.removeActivity(a.id, !!catalog.custom[a.id]));
+      Store.removeCity(id, isCustomCity(id));
+      toast(n > 0 ? `Ville et ${n} activité${n>1?"s":""} retirées` : "Ville retirée");
+    },
+  });
 }
 
 /* ---------- Modale générique ---------- */
@@ -833,9 +865,15 @@ function openItinModal(i, insertAt) {
 }
 function deleteItin(i) {
   const it = getItinerary();
-  if (!confirm(`Supprimer l'étape « ${it[i].title} » ?`)) return;
-  Store.saveItinerary(it.filter((_, idx) => idx !== i).map((x) => ({ ...x })));
-  toast("Étape supprimée");
+  confirmDialog({
+    title: `Supprimer l'étape ?`,
+    message: `« ${it[i].title} » sera retirée de l'itinéraire.`,
+    confirmLabel: "Supprimer", danger: true,
+    onConfirm: () => {
+      Store.saveItinerary(it.filter((_, idx) => idx !== i).map((x) => ({ ...x })));
+      toast("Étape supprimée");
+    },
+  });
 }
 function moveItin(i, dir) {
   const it = getItinerary().map((x) => ({ ...x }));

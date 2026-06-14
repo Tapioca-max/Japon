@@ -779,3 +779,13 @@ body.edit-mode .citybar-admin{display:inline-flex}
   #plan.view{display:block !important}
   .plan-city{break-inside:avoid; box-shadow:none; border:1px solid #ccc}
 }
+
+/* ============================================================
+   v13 — Confirmation intégrée (suppression)
+   ============================================================ */
+.btn.danger{background:var(--red); color:#fff}
+.btn.danger:hover{filter:brightness(1.05)}
+.modal-confirm{width:min(440px,100%)}
+.confirm-msg{font-size:.96rem; color:var(--ink); line-height:1.55; margin:0}
+.confirm-msg b{color:var(--red)}
+.confirm-sub{display:block; font-size:.8rem; color:var(--ink-soft); margin-top:.6rem}
