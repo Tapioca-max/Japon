@@ -884,3 +884,51 @@ body.edit-mode .day-add{display:inline-flex !important}
 .pool-chip{background:#fff; border:1px dashed var(--red); color:var(--ink); border-radius:99px; padding:.18rem .55rem; font-size:.78rem}
 .day-pool.all-placed{color:var(--ok); font-weight:700}
 @media print{ .day-add,.day-act-x{display:none !important} }
+
+/* ============================================================
+   v20 — Plan agenda calendaire (grille type Outlook)
+   ============================================================ */
+.cal-hint{max-width:820px; margin:0 auto .8rem; text-align:center; font-size:.82rem; color:var(--ink-soft); font-style:italic}
+.cal-grid{max-width:820px; margin:0 auto; display:grid; grid-template-columns:repeat(7,1fr); gap:6px}
+.cal-wd{text-align:center; font-family:var(--round); font-weight:700; font-size:.72rem; color:var(--ink-soft); padding:.2rem 0}
+.cal-cell{min-height:92px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:.3rem .35rem;
+  display:flex; flex-direction:column; gap:.2rem; overflow:hidden}
+.cal-cell.out{background:transparent; border:1px dashed var(--line-2); opacity:.45}
+.cal-cell.in{cursor:pointer; border-top:3px solid var(--cc,var(--red)); transition:.15s}
+.cal-cell.in:hover{box-shadow:var(--sh); transform:translateY(-2px)}
+.cal-daynum{font-weight:800; font-size:.82rem; color:var(--ink); display:flex; align-items:baseline; gap:.3rem; flex-wrap:wrap}
+.cal-cty{font-family:var(--round); font-weight:700; font-size:.62rem; color:var(--cc,var(--red))}
+.cal-chips{display:flex; flex-direction:column; gap:2px; overflow:hidden}
+.cal-chip{font-size:.64rem; background:var(--cream); border-radius:5px; padding:1px 4px; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis}
+.cal-chip b{color:var(--red)}
+.cal-more{font-size:.62rem; color:var(--ink-faint); font-weight:700}
+@media(max-width:560px){
+  .cal-grid{gap:3px}
+  .cal-cell{min-height:74px; border-radius:8px; padding:.2rem}
+  .cal-cty{display:none}
+  .cal-chip{font-size:.58rem}
+}
+
+/* détail d'une journée */
+.modal-day{width:min(520px,100%)}
+.dd-list{display:flex; flex-direction:column; gap:.5rem; margin-bottom:.4rem}
+.dd-row{display:flex; align-items:flex-start; gap:.6rem; background:var(--cream); border:1px solid var(--line-2);
+  border-radius:12px; padding:.5rem .65rem}
+.dd-time{flex:0 0 auto; min-width:74px; font-family:var(--round); font-weight:700; font-size:.78rem; color:var(--red)}
+.dd-main{flex:1; min-width:0; display:flex; flex-direction:column; gap:.25rem}
+.dd-title{font-weight:600; font-size:.92rem}
+.dd-title .pc-link{text-decoration:none}
+.dd-who{display:flex; flex-wrap:wrap; gap:.25rem}
+.dd-del{border:none; background:none; color:var(--ink-faint); font-size:1.15rem; line-height:1; cursor:pointer; padding:0 .1rem}
+.dd-del:hover{color:var(--red)}
+.dd-add{border-top:1px dashed var(--line); padding-top:.7rem; display:flex; flex-direction:column; gap:.55rem}
+.dd-lbl{font-size:.78rem; font-weight:700; color:var(--ink-soft)}
+.dd-add select{font-family:var(--sans); font-size:16px; border:1px solid var(--line-2); border-radius:10px; padding:.55rem .7rem; background:#fff; width:100%}
+.dd-slots{display:flex; flex-wrap:wrap; gap:.4rem .9rem}
+.dd-slots label{display:flex; align-items:center; gap:.3rem; font-size:.85rem; cursor:pointer}
+.dd-slots input{accent-color:var(--red)}
+.dd-times{display:flex; align-items:center; gap:.5rem}
+.dd-times input{border:1px solid var(--line-2); border-radius:8px; padding:.4rem .5rem; font-size:16px}
+
+@media print{ .cal-cell.in{cursor:default} .cal-hint{display:none} }
