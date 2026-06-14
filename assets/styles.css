@@ -507,3 +507,70 @@ body::before{content:""; position:fixed; inset:0; z-index:-1; pointer-events:non
 .tl-insert:hover .tl-add, body.edit-mode .tl-add{opacity:1; transform:translate(-50%,-50%) scale(1)}
 .tl-add:hover{background:var(--red); color:#fff}
 @media(max-width:600px){.tl-add{left:24px}}
+
+/* ============================================================
+   v6 — Couleurs automne, décorations & timeline (date à gauche)
+   ============================================================ */
+:root{
+  --cream:#f7efe0; --paper-2:#f1e8d6;
+  --gold:#d8a93f; --gold-soft:#ecd49a;
+  --grad-cool:linear-gradient(135deg,#1b2440,#3a2f6b 58%,#7a2f5e);
+  --grad-hot:linear-gradient(135deg,#e0234e,#f0744e);
+}
+
+/* — Feuilles d'automne qui tombent (accueil) — */
+.hero .leaves{position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0}
+.hero .leaves span{position:absolute; top:-8%; font-size:1.4rem; opacity:0; animation:fall linear infinite}
+.hero .leaves span:nth-child(1){left:7%;  animation-duration:13s; animation-delay:0s}
+.hero .leaves span:nth-child(2){left:26%; animation-duration:17s; animation-delay:3s; font-size:1.1rem}
+.hero .leaves span:nth-child(3){left:48%; animation-duration:15s; animation-delay:6s}
+.hero .leaves span:nth-child(4){left:67%; animation-duration:19s; animation-delay:2s; font-size:1rem}
+.hero .leaves span:nth-child(5){left:82%; animation-duration:14s; animation-delay:8s}
+.hero .leaves span:nth-child(6){left:93%; animation-duration:21s; animation-delay:5s; font-size:1.2rem}
+@keyframes fall{
+  0%{transform:translate(0,-30px) rotate(0); opacity:0}
+  12%{opacity:.55} 90%{opacity:.45}
+  100%{transform:translate(34px,460px) rotate(340deg); opacity:0}
+}
+.hero-head, .hero .dash-grid, .hero .city-progress, .hero .home-cta{position:relative; z-index:1}
+
+/* — Petits motifs décoratifs — */
+.hero-head::after{content:"⛩  ✿  🍁  ✿  ⛩"; display:block; margin:.7rem auto 0; font-size:.92rem; letter-spacing:.45em; opacity:.85}
+.section .section-head::after{content:""; display:block; width:64px; height:4px; margin:.85rem auto 0;
+  border-radius:3px; background:linear-gradient(90deg,var(--gold),var(--red))}
+.section-head h2::after{content:" ❀"; color:var(--gold); font-size:.5em; vertical-align:.4em}
+
+/* — Vague décorative au-dessus du pied de page (uroko) — */
+.footer{position:relative; border-top:none}
+.footer::before{content:""; position:absolute; top:-12px; left:0; right:0; height:13px;
+  background:radial-gradient(circle at 12px 13px, transparent 10px, var(--gold) 11px) repeat-x; background-size:24px 13px}
+
+/* — Topbar : liseré manga — */
+.topbar{border-bottom:3px solid var(--ink-line); box-shadow:0 3px 0 var(--gold)}
+
+/* ============================================================
+   Timeline : date & jour À GAUCHE du fil, "+" entre les cartes
+   ============================================================ */
+.timeline{max-width:700px; padding-left:0; margin-top:.5rem}
+.timeline::before{left:104px; width:3px; background:linear-gradient(var(--gold),var(--red),var(--indigo))}
+.tl{display:grid; grid-template-columns:96px 1fr; gap:1rem; padding:.45rem 0; position:relative; align-items:start}
+.tl-date{text-align:right; padding-right:.4rem; padding-top:.25rem; line-height:1.18; font-family:var(--round)}
+.tl-d{display:block; font-weight:700; color:var(--red); font-size:.82rem}
+.tl-date small{display:block; color:var(--ink-soft); font-size:.72rem; font-family:var(--sans); margin-top:.1rem}
+.tl-body::before{left:-16px; top:1.05rem; width:15px; height:15px}
+
+/* bouton "+" : centré dans la colonne carte, dans le vide entre 2 étapes */
+.tl-insert{display:flex; justify-content:center; align-items:center; padding-left:calc(96px + 1rem); height:18px}
+.tl-add{position:static; left:auto; top:auto; transform:scale(.55)}
+.tl-insert:hover .tl-add, body.edit-mode .tl-add{transform:scale(1)}
+
+@media(max-width:600px){
+  .timeline::before{left:78px}
+  .tl{grid-template-columns:70px 1fr; gap:.6rem}
+  .tl-body::before{left:-13px}
+  .tl-insert{padding-left:calc(70px + .6rem)}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .hero .leaves{display:none}
+}

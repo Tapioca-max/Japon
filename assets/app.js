@@ -451,6 +451,7 @@ function renderTimeline() {
   const inserter = (k) => `<li class="tl-insert"><button class="tl-add" data-at="${k}" title="Insérer une étape ici">＋</button></li>`;
   const step = (t, i) => `
     <li class="tl">
+      <div class="tl-date"><span class="tl-d">${t.date}</span>${t.day?`<small>${t.day}</small>`:""}</div>
       <div class="tl-body">
         <div class="tl-admin">
           <button class="tl-up" data-i="${i}" title="Monter" ${i===0?"disabled":""}>↑</button>
@@ -458,7 +459,6 @@ function renderTimeline() {
           <button class="tl-edit" data-i="${i}" title="Modifier">✏️</button>
           <button class="tl-del" data-i="${i}" title="Supprimer">🗑️</button>
         </div>
-        <span class="tl-badge">${t.date}${t.day?` · ${t.day}`:""}</span>
         <h4>${t.title}</h4>${t.desc?`<p>${t.desc}</p>`:""}
       </div>
     </li>`;
