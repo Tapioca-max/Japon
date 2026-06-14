@@ -1,8 +1,13 @@
 name: Deploy to GitHub Pages
 
+# Déploie deux environnements sur le MÊME site Pages :
+#   - PROD    -> https://tapioca-max.github.io/Japon/        (branche prod)
+#   - PREVIEW -> https://tapioca-max.github.io/Japon/preview/ (branche "preview")
+# Un push sur l'une OU l'autre branche reconstruit l'ensemble.
+
 on:
   push:
-    branches: ["claude/beautiful-johnson-daiis5", "main"]
+    branches: ["claude/beautiful-johnson-daiis5", "preview", "main"]
   workflow_dispatch:
 
 permissions:
@@ -12,19 +17,53 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: true
+  cancel-in-progress: false
+
+env:
+  PROD_BRANCH: claude/beautiful-johnson-daiis5
+  PREVIEW_BRANCH: preview
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PROD (racine)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PROD_BRANCH }}
+          path: site
+
+      - name: Checkout PREVIEW (facultatif)
+        id: prev
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PREVIEW_BRANCH }}
+          path: preview-src
+        continue-on-error: true
+
+      - name: Assembler /preview
+        run: |
+          rm -rf site/preview && mkdir -p site/preview
+          if [ -d preview-src ]; then
+            cp -r preview-src/. site/preview/
+            rm -rf site/preview/.git site/preview/preview
+            echo "Preview assemblée."
+          else
+            echo "Pas encore de branche '$PREVIEW_BRANCH' — /preview reflètera la prod en attendant."
+            cp -r site/assets site/index.html site/preview/ 2>/dev/null || true
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
   deploy:
+    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: "."
       - id: deployment
         uses: actions/deploy-pages@v4
