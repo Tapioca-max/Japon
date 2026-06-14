@@ -600,11 +600,19 @@ function slotMins(e) {
   return 1441;
 }
 function slotLabel(e) {
-  if (e.slot === "am") return "Matin";
-  if (e.slot === "pm") return "Après-midi";
+  if (e.slot === "am") return "Matin · 08:00–12:00";
+  if (e.slot === "pm") return "Après-midi · 13:00–18:00";
   if (e.slot === "time") return e.start ? (e.end ? `${e.start} – ${e.end}` : e.start) : "Heure";
-  return "Journée";
+  return "Journée entière";
 }
+function timeToMin(s) { if (!s) return null; const [h, m] = s.split(":").map(Number); return h * 60 + (m || 0); }
+function slotRange(e) {
+  if (e.slot === "am") return [480, 720];   // 08:00–12:00
+  if (e.slot === "pm") return [780, 1080];  // 13:00–18:00
+  if (e.slot === "time") { const s = timeToMin(e.start) ?? 0; const en = timeToMin(e.end) ?? (s + 60); return [s, Math.max(en, s + 1)]; }
+  return [0, 1440];                         // journée entière
+}
+const rangesOverlap = (a, b) => a[0] < b[1] && b[0] < a[1];
 function slotShort(e) {
   if (e.slot === "am") return "AM";
   if (e.slot === "pm") return "PM";
@@ -764,6 +772,14 @@ function openDayDetail(dk) {
         entry.end = root.querySelector("#ddEnd").value;
         if (!entry.start) { toast("Indique au moins une heure de début"); return; }
         if (!entry.end) delete entry.end;
+      }
+      // empêcher le chevauchement avec un créneau déjà placé ce jour-là
+      const r = slotRange(entry);
+      const clash = work.find((x) => rangesOverlap(slotRange(x), r));
+      if (clash) {
+        const ca = getActs().find((z) => z.id === clash.id);
+        toast(`Créneau occupé par « ${ca ? ca.title : "une activité"} » (${slotLabel(clash)})`);
+        return;
       }
       work = [...work, entry];
       persist(); render();
