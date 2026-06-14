@@ -631,13 +631,13 @@ function renderPlan() {
   const fmtL = (d) => d ? new Date(d).toLocaleDateString("fr-FR", { day:"numeric", month:"long" }) : "?";
 
   const resBanner = reservations.length ? `
-    <div class="plan-res">
-      <h3>🎫 À réserver à l'avance — ${reservations.length}</h3>
+    <details class="plan-res">
+      <summary>🎫 À réserver à l'avance — ${reservations.length}</summary>
       <ul>${reservations.map((a) => {
         const c = cities.find((x) => x.id === a.city);
         return `<li><b>${a.title}</b>${c?` <span class="pr-city">${c.name}</span>`:""}${a.booking?` — <a href="${a.booking}" target="_blank" rel="noopener">réserver →</a>`:""}${a.warn?`<span class="pr-warn">${a.warn}</span>`:""}</li>`;
       }).join("")}</ul>
-    </div>` : "";
+    </details>` : "";
 
   const withDates = cities.filter((c) => c.arrival);
   if (!withDates.length) {
@@ -646,38 +646,53 @@ function renderPlan() {
   }
   const tripStart = withDates.reduce((m, c) => c.arrival < m ? c.arrival : m, withDates[0].arrival);
   const tripEnd = withDates.reduce((m, c) => { const d = c.departure || c.arrival; return d > m ? d : m; }, withDates[0].departure || withDates[0].arrival);
-  const gridStart = mondayOf(tripStart);
-  const lastMon = mondayOf(tripEnd);
-  const gridEnd = lastMon + 6 * 86400000;
   const colors = cityColorMap();
+  const wdShort = ["dim","lun","mar","mer","jeu","ven","sam"];
+  const moShort = ["jan","fév","mar","avr","mai","juin","juil","août","sept","oct","nov","déc"];
 
-  const wd = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map((d) => `<div class="cal-wd">${d}</div>`).join("");
-  let cells = "";
-  for (let t = gridStart; t <= gridEnd; t += 86400000) {
+  let rows = "", prevCity = "__none__";
+  for (let t = new Date(tripStart + "T00:00:00Z").getTime(); t <= new Date(tripEnd + "T00:00:00Z").getTime(); t += 86400000) {
     const dk = isoUTC(t);
-    const inTrip = dk >= tripStart && dk <= tripEnd;
+    const d = new Date(t);
     const c = cityForDay(dk);
     const col = c ? colors[c.id] : "var(--ink-faint)";
+    const cid = c ? c.id : "__none__";
+    if (cid !== prevCity) {
+      rows += `<div class="agd-sep" style="--cc:${col}">${c ? `${c.name} ${c.jp?`<span class="jp">${c.jp}</span>`:""}` : "Retour"}</div>`;
+      prevCity = cid;
+    }
     const entries = dayEntries(dk).map((e) => ({ e, a: acts.find((x) => x.id === e.id) })).filter((x) => x.a).sort((x, y) => slotMins(x.e) - slotMins(y.e));
-    const shown = entries.slice(0, 3).map(({ e, a }) => `<span class="cal-chip"><b>${slotShort(e)}</b> ${a.title}</span>`).join("");
-    const more = entries.length > 3 ? `<span class="cal-more">+${entries.length - 3}</span>` : "";
-    const dnum = new Date(t).getUTCDate();
-    cells += `<div class="cal-cell ${inTrip ? "in" : "out"}" ${inTrip ? `data-day="${dk}" style="--cc:${col}"` : ""}>
-        <div class="cal-daynum">${dnum}${c ? `<span class="cal-cty">${c.name}</span>` : ""}</div>
-        <div class="cal-chips">${inTrip ? shown + more : ""}</div>
+    const items = entries.length
+      ? entries.map(({ e, a }) => {
+          const parts = yesMembers(a.id);
+          const who = parts.length === MEMBERS.length
+            ? `<span class="pc-all">👥 Tous</span>`
+            : parts.map((m) => `<span class="who-chip" style="--mc:${colorFor(m)}">${m}</span>`).join("");
+          return `<div class="agd-item">
+              <span class="agd-time">${slotLabel(e)}</span>
+              <span class="agd-title">${CATS[a.cat]?.emoji||"📍"} ${a.title}${a.booking?` <a class="pc-link" href="${a.booking}" target="_blank" rel="noopener">🎫</a>`:""}</span>
+              <span class="agd-who">${who}</span>
+            </div>`;
+        }).join("")
+      : `<span class="day-free">Journée libre — clique pour ajouter</span>`;
+    rows += `<div class="agd-day" data-day="${dk}" style="--cc:${col}">
+        <div class="agd-date"><span class="agd-wd">${wdShort[d.getUTCDay()]}</span><span class="agd-num">${d.getUTCDate()}</span><span class="agd-mon">${moShort[d.getUTCMonth()]}</span></div>
+        <div class="agd-body">${items}</div>
+        <span class="agd-go">›</span>
       </div>`;
   }
 
   wrap.innerHTML = `
     <div class="plan-summary">
       <span><b>${totalValid}</b> validées · <b>${cities.length}</b> villes · ${fmtL(tripStart)} → ${fmtL(tripEnd)}</span>
-      <button class="btn ghost sm" id="printPlan">🖨️ Imprimer / PDF</button>
     </div>
     ${resBanner}
-    <p class="cal-hint">Clique sur une journée pour voir/éditer le détail (activités, horaires, participants).</p>
-    <div class="cal-grid">${wd}${cells}</div>`;
-  const pb = $("#printPlan"); if (pb) pb.addEventListener("click", () => window.print());
-  $$(".cal-cell.in", wrap).forEach((el) => el.addEventListener("click", () => openDayDetail(el.dataset.day)));
+    <p class="cal-hint">Clique sur une journée pour y placer des activités (horaires &amp; participants).</p>
+    <div class="agenda">${rows}</div>`;
+  $$(".agd-day", wrap).forEach((el) => el.addEventListener("click", (ev) => {
+    if (ev.target.closest("a")) return;
+    openDayDetail(el.dataset.day);
+  }));
 }
 
 /* ---------- Détail d'une journée (modale qui reste ouverte) ---------- */

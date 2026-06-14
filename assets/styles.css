@@ -932,3 +932,61 @@ body.edit-mode .day-add{display:inline-flex !important}
 .dd-times input{border:1px solid var(--line-2); border-radius:8px; padding:.4rem .5rem; font-size:16px}
 
 @media print{ .cal-cell.in{cursor:default} .cal-hint{display:none} }
+
+/* ============================================================
+   v21 — Calendrier plus grand + réservations déroulantes
+   ============================================================ */
+/* Réservations en section dépliable */
+details.plan-res{max-width:1060px; margin:0 auto 1.3rem; background:#fff; border:1px solid var(--line);
+  border-left:4px solid var(--red); border-radius:14px; box-shadow:var(--sh-sm); overflow:hidden}
+details.plan-res>summary{cursor:pointer; list-style:none; padding:.85rem 1.1rem; font-family:var(--serif);
+  font-weight:800; font-size:1.02rem; color:var(--red); display:flex; align-items:center; gap:.5rem}
+details.plan-res>summary::-webkit-details-marker{display:none}
+details.plan-res>summary::after{content:"▾"; margin-left:auto; transition:transform .2s; color:var(--ink-soft)}
+details.plan-res[open]>summary::after{transform:rotate(180deg)}
+details.plan-res ul{margin:0; padding:.1rem 1.1rem 1rem 2.1rem; display:flex; flex-direction:column; gap:.45rem; font-size:.9rem}
+
+/* Calendrier plus grand et mis en avant */
+.cal-hint{max-width:1060px; font-size:.86rem}
+.cal-grid{max-width:1060px; gap:8px}
+.cal-cell{min-height:124px; border-radius:12px; padding:.4rem .45rem; gap:.3rem}
+.cal-cell.in{border-top-width:4px}
+.cal-daynum{font-size:.92rem}
+.cal-cty{font-size:.66rem}
+.cal-chips{gap:3px}
+.cal-chip{font-size:.72rem; padding:2px 6px; border-radius:6px}
+.cal-more{font-size:.7rem}
+.cal-wd{font-size:.78rem; padding:.3rem 0}
+@media(max-width:560px){
+  .cal-cell{min-height:86px; padding:.25rem}
+  .cal-chip{font-size:.6rem}
+}
+
+/* ============================================================
+   v22 — Agenda VERTICAL (une ligne par jour, plus de détail)
+   ============================================================ */
+.agenda{max-width:780px; margin:0 auto; display:flex; flex-direction:column; gap:.5rem}
+.agd-sep{position:sticky; top:52px; z-index:5; font-family:var(--serif); font-weight:800; font-size:1rem; color:#fff;
+  background:var(--cc,var(--red)); border-radius:10px; padding:.45rem .85rem; margin-top:.8rem; box-shadow:var(--sh-sm)}
+.agd-sep:first-child{margin-top:0}
+.agd-sep .jp{color:rgba(255,255,255,.85); font-size:.85rem}
+.agd-day{display:flex; align-items:stretch; gap:.8rem; background:#fff; border:1px solid var(--line);
+  border-left:4px solid var(--cc,var(--red)); border-radius:12px; padding:.6rem .8rem; cursor:pointer; transition:.15s}
+.agd-day:hover{box-shadow:var(--sh); transform:translateX(2px)}
+.agd-date{flex:0 0 50px; text-align:center; display:flex; flex-direction:column; line-height:1.05; padding-top:.15rem}
+.agd-wd{font-size:.64rem; text-transform:uppercase; color:var(--ink-faint); font-weight:700}
+.agd-num{font-family:var(--serif); font-size:1.5rem; font-weight:800; color:var(--cc,var(--red))}
+.agd-mon{font-size:.64rem; color:var(--ink-soft)}
+.agd-body{flex:1; min-width:0; display:flex; flex-direction:column; gap:.45rem; justify-content:center;
+  border-left:1px solid var(--line); padding-left:.85rem}
+.agd-item{display:flex; flex-wrap:wrap; align-items:center; gap:.35rem .6rem}
+.agd-time{flex:0 0 auto; min-width:88px; font-family:var(--round); font-weight:700; font-size:.78rem; color:var(--red)}
+.agd-title{font-weight:600; font-size:.92rem}
+.agd-title .pc-link{text-decoration:none}
+.agd-who{display:inline-flex; flex-wrap:wrap; gap:.25rem; margin-left:auto}
+.agd-go{align-self:center; color:var(--ink-faint); font-size:1.5rem; font-weight:700; flex:0 0 auto}
+@media(max-width:560px){
+  .agd-time{min-width:0; flex-basis:100%}
+  .agd-who{margin-left:0}
+  .agd-sep{top:50px}
+}
